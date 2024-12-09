@@ -6,6 +6,8 @@ import re
 import jinja2
 from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security.api_key import APIKeyQuery
+from morecantile import tms, TileMatrixSet
+from pyproj import CRS
 from rio_tiler.io import Reader, STACReader
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
@@ -97,6 +99,20 @@ app = FastAPI(
 ###############################################################################
 # Simple Dataset endpoints (e.g Cloud Optimized GeoTIFF)
 if not api_settings.disable_cog:
+    EPSG6933 = TileMatrixSet.custom(
+        (-17357881.81713629, -7324184.56362408, 17357881.81713629, 7324184.56362408),
+        CRS.from_epsg(6933),
+        id="EPSG6933",
+        matrix_scale=[1, 1],
+    )
+    EPSG27700 = TileMatrixSet.custom(
+        (0.0, 0.0, 700000.0, 1300000.0),
+        CRS.from_epsg(27700),
+        id="BritishNationalGrid",
+        matrix_scale=[1, 1]
+    )
+    tms = tms.register({EPSG6933.id: EPSG6933, EPSG27700.id: EPSG27700})
+
     cog = TilerFactory(
         reader=Reader,
         router_prefix="/cog",
@@ -105,6 +121,7 @@ if not api_settings.disable_cog:
             cogViewerExtension(),
             stacExtension(),
         ],
+        supported_tms=tms,
     )
 
     app.include_router(
