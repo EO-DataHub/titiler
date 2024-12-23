@@ -1236,6 +1236,30 @@ class TilerFactory(BaseFactory):
             )
 
             return Response(content, media_type=media_type)
+        
+
+	############################################################################
+    # /test-auth
+    ############################################################################
+    def test_auth(self):
+        """Register /test-auth endpoint."""
+
+        @self.router.get("/test-auth", response_class=HTMLResponse)
+        def test_auth(request: Request):
+            """Test authentication."""
+            # Build up a dictionary of all auth components and return
+            output_dict = {
+                "auth": request.auth,
+                "is_authenticated": request.is_authenticated,
+                "credentials": request.credentials,
+                "user": request.user,
+                "session": request.session,
+                "cookies": request.cookies,
+                "headers": request.headers
+            }
+            
+            # Return the output dict JSON
+            return output_dict
 
     ############################################################################
     # /bbox and /feature (Optional)
