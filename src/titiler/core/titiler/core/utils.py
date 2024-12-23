@@ -1,10 +1,16 @@
 """titiler.core utilities."""
 
+import os
+import re
 import warnings
 from typing import Any, Optional, Sequence, Tuple, Union
 
+import boto3
 import numpy
+import requests
+from fastapi import HTTPException, Request
 from rasterio.dtypes import dtype_ranges
+from rasterio.session import AWSSession
 from rio_tiler.colormap import apply_cmap
 from rio_tiler.errors import InvalidDatatypeWarning
 from rio_tiler.models import ImageData
@@ -12,6 +18,13 @@ from rio_tiler.types import ColorMapType, IntervalTuple
 from rio_tiler.utils import linear_rescale, render
 
 from titiler.core.resources.enums import ImageType
+
+CREDENTIALS_ENDPOINT = os.getenv("CREDENTIALS_ENDPOINT", "https://dev.eodatahub.org.uk/api/workspaces/s3/credentials")
+DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
+WHITELIST_PATTERNS = [
+    r"^https://workspaces-eodhp-[\w-]+\.s3\.eu-west-2\.amazonaws\.com/",  # e.g. https://workspaces-eodhp-dev.s3.eu-west-2.amazonaws.com
+    r"^s3://workspaces-eodhp-[\w-]+/",                                   # e.g. s3://workspaces-eodhp-dev
+]
 
 
 def rescale_array(
@@ -116,3 +129,116 @@ def render_image(
         ),
         output_format.mediatype,
     )
+
+
+def force_no_irsa() -> None:
+    """
+    Remove environment variables that cause botocore/boto3 to attempt
+    STS AssumeRoleWithWebIdentity for IRSA (EKS). This ensures we rely
+    ONLY on the ephemeral credentials we fetch below.
+    """
+    for var in ("AWS_ROLE_ARN", "AWS_WEB_IDENTITY_TOKEN_FILE"):
+        if var in os.environ:
+            del os.environ[var]
+
+
+def is_whitelisted_url(url: str) -> bool:
+    """
+    Check if the given URL matches ANY of the patterns in WHITELIST_PATTERNS.
+    If yes, we want to attach ephemeral S3 credentials.
+    """
+    for pattern in WHITELIST_PATTERNS:
+        if re.match(pattern, url):
+            return True
+    return False
+
+
+def rewrite_https_to_s3_if_needed(url: str) -> str:
+    """
+    If the URL starts with https://workspaces-eodhp-*, rewrite to s3:// if it matches the pattern.
+    Otherwise, return it unchanged.
+    """
+    # Example: https://workspaces-eodhp-dev.s3.eu-west-2.amazonaws.com/james/test.tif
+    # becomes s3://workspaces-eodhp-dev/james/test.tif
+    # We'll capture the bucket part from the domain and the key after the slash.
+
+    # This pattern looks for: https://(workspaces-eodhp-<something>).s3.eu-west-2.amazonaws.com/(rest)
+    https_pattern = r"^https://(workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(.*)"
+    match = re.match(https_pattern, url)
+    if match:
+        bucket_part = match.group(1)  # e.g. workspaces-eodhp-dev
+        key_part = match.group(2)    # e.g. james/test.tif
+        return f"s3://{bucket_part}/{key_part}"
+
+    return url
+
+
+def resolve_src_path_and_credentials(
+    src_path: str,
+    request: Request,
+    gdal_env: dict,
+) -> tuple[str, dict]:
+    """
+    1) If src_path is in our WHITELIST, attach ephemeral S3 credentials (if not present).
+    2) If src_path starts with `https://workspaces-eodhp-...`, rewrite to `s3://workspaces-eodhp-...`.
+    3) Return (resolved_path, updated_env) for use in rasterio.Env(**updated_env).
+    """
+
+    updated_env = dict(gdal_env)
+
+    # 1. Check if URL is in our "whitelist" (either https:// or s3:// for workspaces-eodhp-*)
+    if is_whitelisted_url(src_path):
+        resolved_path = rewrite_https_to_s3_if_needed(src_path)
+
+        # 2. Force ignoring IRSA if we want ephemeral credentials
+        force_no_irsa()
+        print("Forcing no IRSA")
+
+        # 3. Check if user is logged in (Auth header or session cookie).
+        auth_header = request.headers.get("authorization")
+        cookie_header = request.headers.get("cookie")
+        if not auth_header and not cookie_header:
+            raise HTTPException(status_code=401, detail="User not logged in")
+
+        # 4. Fetch ephemeral credentials from your endpoint
+        cred_response = requests.get(
+            CREDENTIALS_ENDPOINT,
+            headers={
+                "Authorization": auth_header,
+                "Cookie": cookie_header,
+            },
+            timeout=5,
+        )
+        print(f"Credentials response: {cred_response.status_code}")
+        if cred_response.status_code != 200:
+            raise HTTPException(
+                status_code=403,
+                detail="Unable to fetch ephemeral AWS credentials",
+            )
+
+        creds = cred_response.json()
+        # e.g. {
+        #   "accessKeyId": "...",
+        #   "secretAccessKey": "...",
+        #   "sessionToken": "...",
+        #   "expiration": "..."
+        # }
+
+        # 5. Create a dedicated boto3 Session with ephemeral creds
+        boto_session = boto3.Session(
+            aws_access_key_id=creds["accessKeyId"],
+            aws_secret_access_key=creds["secretAccessKey"],
+            aws_session_token=creds["sessionToken"],
+            region_name=DEFAULT_REGION,
+        )
+        aws_session = AWSSession(boto_session, requester_pays=False)
+        updated_env.pop("AWS_ACCESS_KEY_ID", None)
+        updated_env.pop("AWS_SECRET_ACCESS_KEY", None)
+        updated_env.pop("AWS_SESSION_TOKEN", None)
+        updated_env["session"] = aws_session
+        print("Updated environment with AWS session")
+
+    else:
+        resolved_path = src_path
+
+    return resolved_path, updated_env
