@@ -40,6 +40,7 @@ from starlette.responses import HTMLResponse, Response
 from starlette.routing import Match, NoMatchFound, compile_path, replace_params
 from starlette.templating import Jinja2Templates
 from typing_extensions import Annotated
+from fastapi import HTTPException
 
 from titiler.core.algorithm import AlgorithmMetadata, Algorithms, BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
@@ -85,7 +86,7 @@ from titiler.core.models.responses import (
 from titiler.core.resources.enums import ImageType
 from titiler.core.resources.responses import GeoJSONResponse, JSONResponse, XMLResponse
 from titiler.core.routing import EndpointScope
-from titiler.core.utils import render_image
+from titiler.core.utils import render_image, resolve_src_path_and_credentials
 
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
@@ -319,6 +320,7 @@ class TilerFactory(BaseFactory):
         self.wmts()
         self.tilejson()
         self.point()
+        self.test_auth()
 
         # Optional Routes
         if self.add_preview:
@@ -758,48 +760,37 @@ class TilerFactory(BaseFactory):
     ############################################################################
     def tile(self):  # noqa: C901
         """Register /tiles endpoint."""
-
         @self.router.get(r"/tiles/{tileMatrixSetId}/{z}/{x}/{y}", **img_endpoint_params)
-        @self.router.get(
-            r"/tiles/{tileMatrixSetId}/{z}/{x}/{y}.{format}", **img_endpoint_params
-        )
-        @self.router.get(
-            r"/tiles/{tileMatrixSetId}/{z}/{x}/{y}@{scale}x", **img_endpoint_params
-        )
-        @self.router.get(
-            r"/tiles/{tileMatrixSetId}/{z}/{x}/{y}@{scale}x.{format}",
-            **img_endpoint_params,
-        )
+        @self.router.get(r"/tiles/{tileMatrixSetId}/{z}/{x}/{y}.{format}", **img_endpoint_params)
+        @self.router.get(r"/tiles/{tileMatrixSetId}/{z}/{x}/{y}@{scale}x", **img_endpoint_params)
+        @self.router.get(r"/tiles/{tileMatrixSetId}/{z}/{x}/{y}@{scale}x.{format}", **img_endpoint_params)
         def tile(
+            request: Request,
             z: Annotated[
                 int,
                 Path(
-                    description="Identifier (Z) selecting one of the scales defined in the TileMatrixSet and representing the scaleDenominator the tile.",
+                    description="Identifier (Z) selecting one of the scales defined in the TileMatrixSet.",
                 ),
             ],
             x: Annotated[
                 int,
                 Path(
-                    description="Column (X) index of the tile on the selected TileMatrix. It cannot exceed the MatrixHeight-1 for the selected TileMatrix.",
+                    description="Column (X) index of the tile on the selected TileMatrix.",
                 ),
             ],
             y: Annotated[
                 int,
                 Path(
-                    description="Row (Y) index of the tile on the selected TileMatrix. It cannot exceed the MatrixWidth-1 for the selected TileMatrix.",
+                    description="Row (Y) index of the tile on the selected TileMatrix.",
                 ),
             ],
             tileMatrixSetId: Annotated[
                 Literal[tuple(self.supported_tms.list())],
-                Path(
-                    description="Identifier selecting one of the TileMatrixSetId supported."
-                ),
+                Path(description="Identifier selecting one of the TileMatrixSetId supported."),
             ],
             scale: Annotated[
                 int,
-                Field(
-                    gt=0, le=4, description="Tile size scale. 1=256x256, 2=512x512..."
-                ),
+                Field(gt=0, le=4, description="Tile size scale. 1=256x256, 2=512x512...")
             ] = 1,
             format: Annotated[
                 ImageType,
@@ -818,11 +809,12 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Create map tile from a dataset."""
+
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+
             tms = self.supported_tms.get(tileMatrixSetId)
-            with rasterio.Env(**env):
-                with self.reader(
-                    src_path, tms=tms, **reader_params.as_dict()
-                ) as src_dst:
+            with rasterio.Env(**updated_env):
+                with self.reader(resolved_path, tms=tms, **reader_params.as_dict()) as src_dst:
                     image = src_dst.tile(
                         x,
                         y,
@@ -834,15 +826,15 @@ class TilerFactory(BaseFactory):
                     )
                     dst_colormap = getattr(src_dst, "colormap", None)
 
+            # 3) Post-processing
             if post_process:
                 image = post_process(image)
-
             if rescale:
                 image.rescale(rescale)
-
             if color_formula:
                 image.apply_color_formula(color_formula)
 
+            # 4) Render the tile
             content, media_type = render_image(
                 image,
                 output_format=format,
@@ -1191,69 +1183,59 @@ class TilerFactory(BaseFactory):
         @self.router.get(r"/preview", **img_endpoint_params)
         @self.router.get(r"/preview.{format}", **img_endpoint_params)
         def preview(
-            format: Annotated[
-                ImageType,
-                "Default will be automatically defined if the output image needs a mask (png) or not (jpeg).",
-            ] = None,
-            src_path=Depends(self.path_dependency),
-            reader_params=Depends(self.reader_dependency),
-            layer_params=Depends(self.layer_dependency),
-            dataset_params=Depends(self.dataset_dependency),
-            image_params=Depends(self.img_preview_dependency),
-            dst_crs=Depends(DstCRSParams),
-            post_process=Depends(self.process_dependency),
-            rescale=Depends(self.rescale_dependency),
-            color_formula=Depends(self.color_formula_dependency),
-            colormap=Depends(self.colormap_dependency),
-            render_params=Depends(self.render_dependency),
-            env=Depends(self.environment_dependency),
+          request: Request,
+          format: ImageType = None,
+          src_path=Depends(self.path_dependency),
+          reader_params=Depends(self.reader_dependency),
+          layer_params=Depends(self.layer_dependency),
+          dataset_params=Depends(self.dataset_dependency),
+          image_params=Depends(self.img_preview_dependency),
+          dst_crs=Depends(DstCRSParams),
+          post_process=Depends(self.process_dependency),
+          rescale=Depends(self.rescale_dependency),
+          color_formula=Depends(self.color_formula_dependency),
+          colormap=Depends(self.colormap_dependency),
+          render_params=Depends(self.render_dependency),
+          env=Depends(self.environment_dependency),
         ):
-            """Create preview of a dataset."""
-            with rasterio.Env(**env):
-                with self.reader(src_path, **reader_params.as_dict()) as src_dst:
-                    image = src_dst.preview(
-                        **layer_params.as_dict(),
-                        **image_params.as_dict(),
-                        **dataset_params.as_dict(),
-                        dst_crs=dst_crs,
-                    )
-                    dst_colormap = getattr(src_dst, "colormap", None)
+          resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+          with rasterio.Env(**updated_env):
+            with self.reader(resolved_path, **reader_params.as_dict()) as src_dst:
+              image = src_dst.preview(
+                **layer_params.as_dict(),
+                **image_params.as_dict(),
+                **dataset_params.as_dict(),
+                dst_crs=dst_crs,
+              )
+              dst_colormap = getattr(src_dst, "colormap", None)
 
-            if post_process:
-                image = post_process(image)
+          # Post-processing
+          if post_process:
+            image = post_process(image)
+          if rescale:
+            image.rescale(rescale)
+          if color_formula:
+            image.apply_color_formula(color_formula)
 
-            if rescale:
-                image.rescale(rescale)
+          content, media_type = render_image(
+            image,
+            output_format=format,
+            colormap=colormap or dst_colormap,
+            **render_params.as_dict(),
+          )
 
-            if color_formula:
-                image.apply_color_formula(color_formula)
-
-            content, media_type = render_image(
-                image,
-                output_format=format,
-                colormap=colormap or dst_colormap,
-                **render_params.as_dict(),
-            )
-
-            return Response(content, media_type=media_type)
-        
-
-	############################################################################
+          return Response(content, media_type=media_type)
+  ############################################################################
     # /test-auth
     ############################################################################
     def test_auth(self):
         """Register /test-auth endpoint."""
 
-        @self.router.get("/test-auth", response_class=HTMLResponse)
+        @self.router.get("/test-auth", response_class=JSONResponse)
         def test_auth(request: Request):
             """Test authentication."""
             # Build up a dictionary of all auth components and return
             output_dict = {
-                "auth": request.auth,
-                "is_authenticated": request.is_authenticated,
-                "credentials": request.credentials,
-                "user": request.user,
-                "session": request.session,
                 "cookies": request.cookies,
                 "headers": request.headers
             }
