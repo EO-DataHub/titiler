@@ -41,6 +41,8 @@ dependencies = [
     "morecantile",
     "simplejson",
     "typing_extensions>=4.6.1",
+    "requests",
+    "boto3",
 ]
 
 [project.optional-dependencies]
