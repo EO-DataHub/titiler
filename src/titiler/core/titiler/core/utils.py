@@ -166,22 +166,21 @@ def rewrite_https_to_s3_if_needed(url: str) -> str:
       s3://workspaces-eodhp-<env>/<key>
 
     And for the new style:
-      https://<subdomain>.staging.eodatahub-workspaces.org.uk/files/workspaces-eodhp-<env>/<key>
+      https://<subdomain>.<env>.eodatahub-workspaces.org.uk/files/workspaces-eodhp-<env>/<key>
     it returns:
       s3://workspaces-eodhp-<env>/<subdomain>/<key>
     """
-    # Cloudfront Pattern:
     new_style_pattern = (
-        r"^https://([\w-]+)\.staging\.eodatahub-workspaces\.org\.uk/files/(workspaces-eodhp-[\w-]+)/(.+)$"
+        r"^https://([\w-]+)\.([\w-]+)\.eodatahub-workspaces\.org\.uk/files/(workspaces-eodhp-[\w-]+)/(.+)$"
     )
     match = re.match(new_style_pattern, url)
     if match:
         subdomain = match.group(1)       # e.g. "james-hinton"
-        bucket_part = match.group(2)       # e.g. "workspaces-eodhp-staging"
-        key_part = match.group(3)          # remainder of the path
+        bucket_part = match.group(3)       # e.g. "workspaces-eodhp-staging"
+        key_part = match.group(4)          # the remaining path after the bucket
         return f"s3://{bucket_part}/{subdomain}/{key_part}"
 
-    # S3 URL Pattern
+    # S3 URL pattern:
     https_pattern = (
         r"^https://(workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(.*)"
     )
