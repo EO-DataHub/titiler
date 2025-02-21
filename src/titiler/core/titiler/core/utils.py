@@ -26,7 +26,7 @@ DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 WHITELIST_PATTERNS = [
     r"^https://workspaces-eodhp-[\w-]+\.s3\.eu-west-2\.amazonaws\.com/",
     r"^s3://workspaces-eodhp-[\w-]+/",
-    r"^https://[\w-]+\.staging\.eodatahub-workspaces\.org\.uk/files/workspaces-eodhp-[\w-]+/",
+    r"^https://([\w-]+)\.([\w-]+)\.eodatahub-workspaces\.org\.uk/files/workspaces-eodhp-[\w-]+/",
 ]
 
 
