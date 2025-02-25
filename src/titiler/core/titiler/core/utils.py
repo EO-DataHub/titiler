@@ -19,11 +19,14 @@ from rio_tiler.utils import linear_rescale, render
 
 from titiler.core.resources.enums import ImageType
 
-CREDENTIALS_ENDPOINT = os.getenv("CREDENTIALS_ENDPOINT", "https://dev.eodatahub.org.uk/api/workspaces/s3/credentials")
+CREDENTIALS_ENDPOINT = os.getenv(
+    "CREDENTIALS_ENDPOINT", "https://dev.eodatahub.org.uk/api/workspaces/s3/credentials"
+)
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 WHITELIST_PATTERNS = [
-    r"^https://workspaces-eodhp-[\w-]+\.s3\.eu-west-2\.amazonaws\.com/",  # e.g. https://workspaces-eodhp-dev.s3.eu-west-2.amazonaws.com
-    r"^s3://workspaces-eodhp-[\w-]+/",                                   # e.g. s3://workspaces-eodhp-dev
+    r"^https://workspaces-eodhp-[\w-]+\.s3\.eu-west-2\.amazonaws\.com/",
+    r"^s3://workspaces-eodhp-[\w-]+/",
+    r"^https://([\w-]+)\.([\w-]+)\.eodatahub-workspaces\.org\.uk/files/workspaces-eodhp-[\w-]+/",
 ]
 
 
@@ -155,19 +158,36 @@ def is_whitelisted_url(url: str) -> bool:
 
 def rewrite_https_to_s3_if_needed(url: str) -> str:
     """
-    If the URL starts with https://workspaces-eodhp-*, rewrite to s3:// if it matches the pattern.
-    Otherwise, return it unchanged.
-    """
-    # Example: https://workspaces-eodhp-dev.s3.eu-west-2.amazonaws.com/james/test.tif
-    # becomes s3://workspaces-eodhp-dev/james/test.tif
-    # We'll capture the bucket part from the domain and the key after the slash.
+    Rewrite HTTPS URLs to S3 URLs when possible.
 
-    # This pattern looks for: https://(workspaces-eodhp-<something>).s3.eu-west-2.amazonaws.com/(rest)
-    https_pattern = r"^https://(workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(.*)"
+    For a URL of the form:
+      https://workspaces-eodhp-<env>.s3.eu-west-2.amazonaws.com/<key>
+    it returns:
+      s3://workspaces-eodhp-<env>/<key>
+
+    And for the new style:
+      https://<subdomain>.<env>.eodatahub-workspaces.org.uk/files/workspaces-eodhp-<env>/<key>
+    it returns:
+      s3://workspaces-eodhp-<env>/<subdomain>/<key>
+    """
+    new_style_pattern = (
+        r"^https://([\w-]+)\.([\w-]+)\.eodatahub-workspaces\.org\.uk/files/(workspaces-eodhp-[\w-]+)/(.+)$"
+    )
+    match = re.match(new_style_pattern, url)
+    if match:
+        subdomain = match.group(1)       # e.g. "james-hinton"
+        bucket_part = match.group(3)       # e.g. "workspaces-eodhp-staging"
+        key_part = match.group(4)          # the remaining path after the bucket
+        return f"s3://{bucket_part}/{subdomain}/{key_part}"
+
+    # S3 URL pattern:
+    https_pattern = (
+        r"^https://(workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(.*)"
+    )
     match = re.match(https_pattern, url)
     if match:
-        bucket_part = match.group(1)  # e.g. workspaces-eodhp-dev
-        key_part = match.group(2)    # e.g. james/test.tif
+        bucket_part = match.group(1)
+        key_part = match.group(2)
         return f"s3://{bucket_part}/{key_part}"
 
     return url
