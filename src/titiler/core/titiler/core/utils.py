@@ -229,9 +229,9 @@ def resolve_src_path_and_credentials(
 
         # 5. Create a dedicated boto3 Session with ephemeral creds
         boto_session = boto3.Session(
-            aws_access_key_id=creds["accessKeyId"],
-            aws_secret_access_key=creds["secretAccessKey"],
-            aws_session_token=creds["sessionToken"],
+            aws_access_key_id=creds["AccessKeyId"],
+            aws_secret_access_key=creds["SecretAccessKey"],
+            aws_session_token=creds["SessionToken"],
             region_name=DEFAULT_REGION,
         )
         aws_session = AWSSession(boto_session, requester_pays=False)
