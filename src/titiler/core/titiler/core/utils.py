@@ -214,13 +214,15 @@ def resolve_src_path_and_credentials(
         #     WebIdentityToken=request.headers.get("Authorization"),
         #     DurationSeconds=60,
         # )
+        token = request.headers.get("Authorization").removeprefix("Bearer ")
+        print('Token', token)
 
         sts = boto3.client("sts")
         creds = sts.assume_role_with_web_identity(
             RoleArn=AWS_ROLE_ARN,
             RoleSessionName="titiler-core",
             DurationSeconds=900,
-            WebIdentityToken=request.headers.get("Authorization").strip("Bearer "),
+            WebIdentityToken=token,
         )["Credentials"]
 
         print("Creds: ", creds)
