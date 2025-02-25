@@ -220,7 +220,7 @@ def resolve_src_path_and_credentials(
             RoleArn=AWS_ROLE_ARN,
             RoleSessionName="titiler-core",
             DurationSeconds=900,
-            WebIdentityToken=request.headers.get("Authorization"),
+            WebIdentityToken=request.headers.get("Authorization").strip("Bearer "),
         )["Credentials"]
 
         print("Creds: ", creds)
