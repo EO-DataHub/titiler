@@ -20,7 +20,7 @@ from rio_tiler.utils import linear_rescale, render
 from titiler.core.resources.enums import ImageType
 
 CREDENTIALS_ENDPOINT = os.getenv(
-    "CREDENTIALS_ENDPOINT", "https://dev.eodatahub.org.uk/api/workspaces/s3/credentials"
+    "CREDENTIALS_ENDPOINT", "https://staging.eodatahub.org.uk/api/workspaces/workspace-name/me/s3-tokens"
 )
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 WHITELIST_PATTERNS = [
@@ -156,7 +156,7 @@ def is_whitelisted_url(url: str) -> bool:
     return False
 
 
-def rewrite_https_to_s3_if_needed(url: str) -> str:
+def rewrite_https_to_s3_if_needed(url: str):
     """
     Rewrite HTTPS URLs to S3 URLs when possible.
 
@@ -175,22 +175,23 @@ def rewrite_https_to_s3_if_needed(url: str) -> str:
     )
     match = re.match(new_style_pattern, url)
     if match:
-        subdomain = match.group(1)       # e.g. "james-hinton"
+        workspace = match.group(1)       # e.g. "james-hinton"
         bucket_part = match.group(3)       # e.g. "workspaces-eodhp-staging"
         key_part = match.group(4)          # the remaining path after the bucket
-        return f"s3://{bucket_part}/{subdomain}/{key_part}"
+        return (f"s3://{bucket_part}/{workspace}/{key_part}", workspace)
 
     # S3 URL pattern:
     https_pattern = (
-        r"^https://(workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(.*)"
+        r"^https://(workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/([\w-]+)/(.+)$"
     )
     match = re.match(https_pattern, url)
     if match:
         bucket_part = match.group(1)
-        key_part = match.group(2)
-        return f"s3://{bucket_part}/{key_part}"
+        workspace = match.group(2)
+        key_part = match.group(3)
+        return (f"s3://{bucket_part}/{workspace}/{key_part}", workspace)
 
-    return url
+    return (url, None)
 
 
 def resolve_src_path_and_credentials(
@@ -198,17 +199,12 @@ def resolve_src_path_and_credentials(
     request: Request,
     gdal_env: dict,
 ) -> tuple[str, dict]:
-    """
-    1) If src_path is in our WHITELIST, attach ephemeral S3 credentials (if not present).
-    2) If src_path starts with `https://workspaces-eodhp-...`, rewrite to `s3://workspaces-eodhp-...`.
-    3) Return (resolved_path, updated_env) for use in rasterio.Env(**updated_env).
-    """
 
     updated_env = dict(gdal_env)
 
     # 1. Check if URL is in our "whitelist" (either https:// or s3:// for workspaces-eodhp-*)
     if is_whitelisted_url(src_path):
-        resolved_path = rewrite_https_to_s3_if_needed(src_path)
+        resolved_path, workspace = rewrite_https_to_s3_if_needed(src_path)
 
         # 2. Force ignoring IRSA if we want ephemeral credentials
         force_no_irsa()
@@ -221,8 +217,10 @@ def resolve_src_path_and_credentials(
             raise HTTPException(status_code=401, detail="User not logged in")
 
         # 4. Fetch ephemeral credentials from your endpoint
-        cred_response = requests.get(
-            CREDENTIALS_ENDPOINT,
+        workspace_credentials_endpoint = CREDENTIALS_ENDPOINT.replace("workspace-name", workspace)
+        print(f"Fetching credentials from: {workspace_credentials_endpoint}")
+        cred_response = requests.post(
+            workspace_credentials_endpoint,
             headers={
                 "Authorization": auth_header,
                 "Cookie": cookie_header,
