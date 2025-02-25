@@ -219,7 +219,7 @@ def resolve_src_path_and_credentials(
         creds = sts.assume_role_with_web_identity(
             RoleArn=AWS_ROLE_ARN,
             RoleSessionName="titiler-core",
-            DurationSeconds=60,
+            DurationSeconds=900,
             WebIdentityToken=request.headers.get("Authorization"),
         )["Credentials"]
 
