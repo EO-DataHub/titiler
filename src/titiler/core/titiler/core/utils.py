@@ -207,13 +207,20 @@ def resolve_src_path_and_credentials(
     if is_whitelisted_url(src_path):
         resolved_path, workspace = rewrite_https_to_s3_if_needed(src_path)
 
-        s3 = boto3.client("s3")
-        creds = s3.assume_role_with_web_identity(
+        # s3 = boto3.client("s3")
+        # creds = s3.assume_role_with_web_identity(
+        #     RoleArn=AWS_ROLE_ARN,
+        #     RoleSessionName="titiler-core",
+        #     WebIdentityToken=request.headers.get("Authorization"),
+        #     DurationSeconds=60,
+        # )
+
+        sts = boto3.client("sts")
+        creds = sts.assume_role(
             RoleArn=AWS_ROLE_ARN,
             RoleSessionName="titiler-core",
-            WebIdentityToken=request.headers.get("Authorization"),
-            DurationSeconds=60,
-        )
+            DurationSeconds=3600,
+        )["Credentials"]
 
         print("Creds: ", creds)
 
