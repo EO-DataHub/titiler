@@ -22,6 +22,7 @@ from titiler.core.resources.enums import ImageType
 CREDENTIALS_ENDPOINT = os.getenv(
     "CREDENTIALS_ENDPOINT", "https://staging.eodatahub.org.uk/api/workspaces/workspace-name/me/s3-tokens"
 )
+AWS_ROLE_ARN = os.getenv("AWS_ROLE_ARN")
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 WHITELIST_PATTERNS = [
     r"^https://workspaces-eodhp-[\w-]+\.s3\.eu-west-2\.amazonaws\.com/",
@@ -206,41 +207,15 @@ def resolve_src_path_and_credentials(
     if is_whitelisted_url(src_path):
         resolved_path, workspace = rewrite_https_to_s3_if_needed(src_path)
 
-        # 2. Force ignoring IRSA if we want ephemeral credentials
-        force_no_irsa()
-        print("Forcing no IRSA")
-
-        # 3. Check if user is logged in (Auth header or session cookie).
-        auth_header = request.headers.get("authorization")
-        cookie_header = request.headers.get("cookie")
-        if not auth_header and not cookie_header:
-            raise HTTPException(status_code=401, detail="User not logged in")
-
-        # 4. Fetch ephemeral credentials from your endpoint
-        workspace_credentials_endpoint = CREDENTIALS_ENDPOINT.replace("workspace-name", workspace)
-        print(f"Fetching credentials from: {workspace_credentials_endpoint}")
-        cred_response = requests.post(
-            workspace_credentials_endpoint,
-            headers={
-                "Authorization": auth_header,
-                "Cookie": cookie_header,
-            },
-            timeout=5,
+        s3 = boto3.client("s3")
+        creds = s3.assume_role_with_web_identity(
+            RoleArn=AWS_ROLE_ARN,
+            RoleSessionName="titiler-core",
+            WebIdentityToken=request.headers.get("Authorization"),
+            DurationSeconds=60,
         )
-        print(f"Credentials response: {cred_response.status_code}")
-        if cred_response.status_code != 200:
-            raise HTTPException(
-                status_code=403,
-                detail="Unable to fetch ephemeral AWS credentials",
-            )
 
-        creds = cred_response.json()
-        # e.g. {
-        #   "accessKeyId": "...",
-        #   "secretAccessKey": "...",
-        #   "sessionToken": "...",
-        #   "expiration": "..."
-        # }
+        print("Creds: ", creds)
 
         # 5. Create a dedicated boto3 Session with ephemeral creds
         boto_session = boto3.Session(
