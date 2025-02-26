@@ -28,6 +28,9 @@ def xarray_open_dataset(  # noqa: C901
         xarray.Dataset
 
     """
+
+    print('Opening Xarray dataset')
+
     import fsspec  # noqa
 
     try:
@@ -43,12 +46,20 @@ def xarray_open_dataset(  # noqa: C901
     parsed = urlparse(src_path)
     protocol = parsed.scheme or "file"
 
+    is_kerchunk = False
+    xr_engine = None
+
+
     if any(src_path.lower().endswith(ext) for ext in [".nc", ".nc4"]):
         assert (
             h5netcdf is not None
         ), "'h5netcdf' must be installed to read NetCDF dataset"
 
         xr_engine = "h5netcdf"
+
+    # TODO: Improve. This is a temporary solution to recognise kerchunked files
+    elif src_path.lower().endswith(".json"):
+        is_kerchunk = True
 
     else:
         assert zarr is not None, "'zarr' must be installed to read Zarr dataset"
@@ -65,8 +76,13 @@ def xarray_open_dataset(  # noqa: C901
     if group is not None:
         xr_open_args["group"] = group
 
+    if is_kerchunk:
+        reference_args = {"fo": src_path}
+        fs = fsspec.filesystem("reference", **reference_args).get_mapper("")
+        ds = xarray.open_zarr(fs, **xr_open_args)
+
     # NetCDF arguments
-    if xr_engine == "h5netcdf":
+    elif xr_engine == "h5netcdf":
         xr_open_args.update(
             {
                 "engine": "h5netcdf",

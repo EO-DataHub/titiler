@@ -43,6 +43,7 @@ from typing_extensions import Annotated
 
 from titiler.core.algorithm import AlgorithmMetadata, Algorithms, BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
+from titiler.core.auth import resolve_src_path_and_credentials
 from titiler.core.dependencies import (
     AssetsBidxExprParams,
     AssetsBidxExprParamsOptional,
@@ -763,6 +764,7 @@ class TilerFactory(BaseFactory):
             **img_endpoint_params,
         )
         def tile(
+            request: Request,
             z: Annotated[
                 int,
                 Path(
@@ -809,9 +811,14 @@ class TilerFactory(BaseFactory):
         ):
             """Create map tile from a dataset."""
             tms = self.supported_tms.get(tileMatrixSetId)
-            with rasterio.Env(**env):
+
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+
+            print('Resolved path:', resolved_path)
+
+            with rasterio.Env(**updated_env):
                 with self.reader(
-                    src_path, tms=tms, **reader_params.as_dict()
+                    resolved_path, tms=tms, **reader_params.as_dict()
                 ) as src_dst:
                     image = src_dst.tile(
                         x,
@@ -1173,6 +1180,7 @@ class TilerFactory(BaseFactory):
         @self.router.get(r"/preview", **img_endpoint_params)
         @self.router.get(r"/preview.{format}", **img_endpoint_params)
         def preview(
+            request: Request,
             format: Annotated[
                 ImageType,
                 "Default will be automatically defined if the output image needs a mask (png) or not (jpeg).",
@@ -1188,9 +1196,12 @@ class TilerFactory(BaseFactory):
             render_params=Depends(self.render_dependency),
             env=Depends(self.environment_dependency),
         ):
+            
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            
             """Create preview of a dataset."""
-            with rasterio.Env(**env):
-                with self.reader(src_path, **reader_params.as_dict()) as src_dst:
+            with rasterio.Env(**updated_env):
+                with self.reader(resolved_path, **reader_params.as_dict()) as src_dst:
                     image = src_dst.preview(
                         **layer_params.as_dict(),
                         **image_params.as_dict(),
