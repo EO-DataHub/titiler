@@ -85,6 +85,8 @@ from titiler.core.resources.responses import GeoJSONResponse, JSONResponse, XMLR
 from titiler.core.routing import EndpointScope
 from titiler.core.utils import bounds_to_geometry, render_image
 
+from titiler.xarray.io import Reader as XarrayReader
+
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
 )
@@ -814,11 +816,13 @@ class TilerFactory(BaseFactory):
 
             resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
 
-            print('Resolved path:', resolved_path)
+            extra_kwargs = {'tms': tms}
+            if self.reader == XarrayReader:
+                extra_kwargs['request_options'] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
-                    resolved_path, tms=tms, **reader_params.as_dict()
+                    resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     image = src_dst.tile(
                         x,

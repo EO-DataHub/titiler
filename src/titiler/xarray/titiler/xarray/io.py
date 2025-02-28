@@ -1,23 +1,30 @@
 """titiler.xarray.io"""
 
+import os
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
 import attr
+import boto3
 import numpy
+import s3fs
 import xarray
 from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 from xarray.namedarray.utils import module_available
 
+from titiler.core.auth import rewrite_https_to_s3_if_needed
+
+AWS_ROLE_ARN = os.getenv("AWS_ROLE_ARN")
 
 def xarray_open_dataset(  # noqa: C901
     src_path: str,
     group: Optional[str] = None,
     decode_times: bool = True,
+    request_options: Optional[Dict] = None,
 ) -> xarray.Dataset:
-    """Open Xarray dataset with fsspec.
+    """Open Xarray dataset
 
     Args:
         src_path (str): dataset path.
@@ -28,8 +35,6 @@ def xarray_open_dataset(  # noqa: C901
         xarray.Dataset
 
     """
-
-    print('Opening Xarray dataset')
 
     import fsspec  # noqa
 
@@ -92,19 +97,43 @@ def xarray_open_dataset(  # noqa: C901
         fs = fsspec.filesystem(protocol)
         ds = xarray.open_dataset(fs.open(src_path), **xr_open_args)
 
-    # Fallback to Zarr
+    # Fallback to Zarr (using the old logic)
     else:
-        if module_available("zarr", minversion="3.0"):
-            if protocol == "file":
-                store = zarr.storage.LocalStore(parsed.path, read_only=True)
-            else:
-                fs = fsspec.filesystem(protocol, storage_options={"asynchronous": True})
-                store = zarr.storage.FsspecStore(fs, path=src_path, read_only=True)
+        src_path, _ = rewrite_https_to_s3_if_needed(src_path)
+        protocol = "s3"
 
-        else:
-            store = fsspec.filesystem(protocol).get_mapper(src_path)
+        if protocol == "s3":
+            access_token = request_options.get("Authorization").removeprefix("Bearer ")
 
-        ds = xarray.open_zarr(store, **xr_open_args)
+            sts = boto3.client("sts")
+            creds_dict = sts.assume_role_with_web_identity(
+                RoleArn=AWS_ROLE_ARN,
+                RoleSessionName="titiler-core",
+                DurationSeconds=900,
+                WebIdentityToken=access_token,
+            )["Credentials"]
+
+            fs = s3fs.S3FileSystem(
+                key=creds_dict["AccessKeyId"],
+                secret=creds_dict["SecretAccessKey"],
+                token=creds_dict["SessionToken"],
+            )
+
+        xr_open_args.update(
+            {
+                "engine": "zarr",
+            }
+        )
+
+        file_handler = fs.get_mapper(src_path)
+
+        ds = xarray.open_dataset(file_handler, consolidated=False,
+                                  **xr_open_args)
+
+        # Validate that it opened and is not empty
+        if ds.keys() == []:
+            raise ValueError(f"Unable to open dataset: {src_path}")
+    
     return ds
 
 
@@ -214,6 +243,8 @@ class Reader(XarrayReader):
     src_path: str = attr.ib()
     variable: str = attr.ib()
 
+    request_options = attr.ib(default=None)
+
     # xarray.Dataset options
     opener: Callable[..., xarray.Dataset] = attr.ib(default=xarray_open_dataset)
 
@@ -237,6 +268,7 @@ class Reader(XarrayReader):
             self.src_path,
             group=self.group,
             decode_times=self.decode_times,
+            request_options=self.request_options,
         )
 
         self.input = get_variable(

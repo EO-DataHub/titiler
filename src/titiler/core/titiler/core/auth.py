@@ -34,7 +34,7 @@ def is_whitelisted_url(url: str) -> bool:
     If yes, we want to attach ephemeral S3 credentials.
     """
     for pattern in WHITELIST_PATTERNS:
-        if re.match(pattern, url):
+        if "/public/" not in url and url.endswith('.tif') and re.match(pattern, url):
             return True
     return False
 
@@ -82,6 +82,8 @@ def resolve_src_path_and_credentials(
 ) -> tuple[str, dict]:
 
     updated_env = dict(gdal_env)
+
+    print('Checking if we are whitelisted', src_path)
 
     # 1. Check if URL is in our "whitelist" (either https:// or s3:// for workspaces-eodhp-*)
     if is_whitelisted_url(src_path):
