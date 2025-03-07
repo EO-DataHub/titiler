@@ -83,14 +83,10 @@ def resolve_src_path_and_credentials(
 
     updated_env = dict(gdal_env)
 
-    print('Checking if we are whitelisted', src_path)
-
     # 1. Check if URL is in our "whitelist" (either https:// or s3:// for workspaces-eodhp-*)
     if is_whitelisted_url(src_path):
-        print('Whitelisted URL', src_path)
         resolved_path, workspace = rewrite_https_to_s3_if_needed(src_path)
         token = request.headers.get("Authorization").removeprefix("Bearer ")
-        print('Token', token)
 
         sts = boto3.client("sts")
         creds = sts.assume_role_with_web_identity(
@@ -99,8 +95,6 @@ def resolve_src_path_and_credentials(
             DurationSeconds=900,
             WebIdentityToken=token,
         )["Credentials"]
-
-        print("Creds: ", creds)
 
         # 5. Create a dedicated boto3 Session with ephemeral creds
         boto_session = boto3.Session(
@@ -114,7 +108,6 @@ def resolve_src_path_and_credentials(
         updated_env.pop("AWS_SECRET_ACCESS_KEY", None)
         updated_env.pop("AWS_SESSION_TOKEN", None)
         updated_env["session"] = aws_session
-        print("Updated environment with AWS session")
 
     else:
         resolved_path = src_path

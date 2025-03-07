@@ -155,8 +155,13 @@
       };
       toggleButton.addTo(map);
 
-      // Add the tile layer!
-      fetch('{{ tilejson_endpoint|safe }}')
+      let tilejson_endpoint = "{{ tilejson_endpoint|safe }}";
+      if (window.location.protocol === 'https:' && tilejson_endpoint.startsWith('http://')) {
+        console.warn('The tilejson endpoint is not secure. Switching to https.');
+        tilejson_endpoint = tilejson_endpoint.replace('http://', 'https://');
+      }
+
+      fetch(tilejson_endpoint)
         .then(res => {
           if (res.ok) return res.json()
           throw new Error('Network response was not ok.')

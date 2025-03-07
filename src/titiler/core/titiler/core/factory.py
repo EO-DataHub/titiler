@@ -847,6 +847,77 @@ class TilerFactory(BaseFactory):
 
             return Response(content, media_type=media_type)
 
+        @self.router.get(r"/tiles/{z}/{x}/{y}", **img_endpoint_params)
+        @self.router.get(
+            r"/tiles/{z}/{x}/{y}.{format}", **img_endpoint_params
+        )
+        @self.router.get(
+            r"/tiles/{z}/{x}/{y}@{scale}x", **img_endpoint_params
+        )
+        @self.router.get(
+            r"/tiles/{z}/{x}/{y}@{scale}x.{format}",
+            **img_endpoint_params,
+        )
+        def tile_without_tms(
+            request: Request,
+            z: Annotated[
+                int,
+                Path(
+                    description="Identifier (Z) selecting one of the scales defined in the TileMatrixSet and representing the scaleDenominator the tile.",
+                ),
+            ],
+            x: Annotated[
+                int,
+                Path(
+                    description="Column (X) index of the tile on the selected TileMatrix. It cannot exceed the MatrixHeight-1 for the selected TileMatrix.",
+                ),
+            ],
+            y: Annotated[
+                int,
+                Path(
+                    description="Row (Y) index of the tile on the selected TileMatrix. It cannot exceed the MatrixWidth-1 for the selected TileMatrix.",
+                ),
+            ],
+            scale: Annotated[
+                int,
+                Field(
+                    gt=0, le=4, description="Tile size scale. 1=256x256, 2=512x512..."
+                ),
+            ] = 1,
+            format: Annotated[
+                ImageType,
+                "Default will be automatically defined if the output image needs a mask (png) or not (jpeg).",
+            ] = None,
+            src_path=Depends(self.path_dependency),
+            reader_params=Depends(self.reader_dependency),
+            tile_params=Depends(self.tile_dependency),
+            layer_params=Depends(self.layer_dependency),
+            dataset_params=Depends(self.dataset_dependency),
+            post_process=Depends(self.process_dependency),
+            colormap=Depends(self.colormap_dependency),
+            render_params=Depends(self.render_dependency),
+            env=Depends(self.environment_dependency),
+        ):
+            tileMatrixSetId = "WebMercatorQuad"
+            return tile(
+                request,
+                z=z,
+                x=x,
+                y=y,
+                tileMatrixSetId=tileMatrixSetId,
+                scale=scale,
+                format=format,
+                src_path=src_path,
+                reader_params=reader_params,
+                tile_params=tile_params,
+                layer_params=layer_params,
+                dataset_params=dataset_params,
+                post_process=post_process,
+                colormap=colormap,
+                render_params=render_params,
+                env=env,
+            )
+
     def tilejson(self):  # noqa: C901
         """Register /tilejson.json endpoint."""
 
@@ -994,6 +1065,58 @@ class TilerFactory(BaseFactory):
                     "resolutions": [matrix.cellSize for matrix in tms],
                 },
                 media_type="text/html",
+            )
+
+        @self.router.get("/map", response_class=HTMLResponse)
+        def map_viewer_without_tms(
+            request: Request,
+            tile_format: Annotated[
+                Optional[ImageType],
+                Query(
+                    description="Default will be automatically defined if the output image needs a mask (png) or not (jpeg).",
+                ),
+            ] = None,
+            tile_scale: Annotated[
+                int,
+                Query(
+                    gt=0, lt=4, description="Tile size scale. 1=256x256, 2=512x512..."
+                ),
+            ] = 1,
+            minzoom: Annotated[
+                Optional[int],
+                Query(description="Overwrite default minzoom."),
+            ] = None,
+            maxzoom: Annotated[
+                Optional[int],
+                Query(description="Overwrite default maxzoom."),
+            ] = None,
+            src_path=Depends(self.path_dependency),
+            reader_params=Depends(self.reader_dependency),
+            tile_params=Depends(self.tile_dependency),
+            layer_params=Depends(self.layer_dependency),
+            dataset_params=Depends(self.dataset_dependency),
+            post_process=Depends(self.process_dependency),
+            colormap=Depends(self.colormap_dependency),
+            render_params=Depends(self.render_dependency),
+            env=Depends(self.environment_dependency),
+        ):
+            tileMatrixSetId = "WebMercatorQuad"
+            return map_viewer(
+                request,
+                tileMatrixSetId=tileMatrixSetId,
+                tile_format=tile_format,
+                tile_scale=tile_scale,
+                minzoom=minzoom,
+                maxzoom=maxzoom,
+                src_path=src_path,
+                reader_params=reader_params,
+                tile_params=tile_params,
+                layer_params=layer_params,
+                dataset_params=dataset_params,
+                post_process=post_process,
+                colormap=colormap,
+                render_params=render_params,
+                env=env,
             )
 
     def wmts(self):  # noqa: C901

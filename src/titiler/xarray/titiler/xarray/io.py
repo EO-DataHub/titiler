@@ -16,7 +16,8 @@ from xarray.namedarray.utils import module_available
 
 from titiler.core.auth import rewrite_https_to_s3_if_needed
 
-AWS_ROLE_ARN = os.getenv("AWS_ROLE_ARN")
+AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
+AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
 
 def xarray_open_dataset(  # noqa: C901
     src_path: str,
@@ -103,21 +104,32 @@ def xarray_open_dataset(  # noqa: C901
         protocol = "s3"
 
         if protocol == "s3":
-            access_token = request_options.get("Authorization").removeprefix("Bearer ")
+            if request_options and "Authorization" in request_options:
+                access_token = request_options.get("Authorization").removeprefix("Bearer ")
 
-            sts = boto3.client("sts")
-            creds_dict = sts.assume_role_with_web_identity(
-                RoleArn=AWS_ROLE_ARN,
-                RoleSessionName="titiler-core",
-                DurationSeconds=900,
-                WebIdentityToken=access_token,
-            )["Credentials"]
+                sts = boto3.client("sts")
+                creds_dict = sts.assume_role_with_web_identity(
+                    RoleArn=AWS_ROLE_ARN,
+                    RoleSessionName="titiler-core",
+                    DurationSeconds=900,
+                    WebIdentityToken=access_token,
+                )["Credentials"]
 
-            fs = s3fs.S3FileSystem(
-                key=creds_dict["AccessKeyId"],
-                secret=creds_dict["SecretAccessKey"],
-                token=creds_dict["SessionToken"],
-            )
+                fs = s3fs.S3FileSystem(
+                    key=creds_dict["AccessKeyId"],
+                    secret=creds_dict["SecretAccessKey"],
+                    token=creds_dict["SessionToken"],
+                )
+            else:
+                session = boto3.Session()
+                creds = session.get_credentials().get_frozen_credentials()
+
+                fs = s3fs.S3FileSystem(
+                    key=creds.access_key,
+                    secret=creds.secret_key,
+                    token=creds.token,
+                    anon=False
+                )
 
         xr_open_args.update(
             {
