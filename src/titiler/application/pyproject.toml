@@ -36,6 +36,8 @@ dependencies = [
     "titiler.mosaic==0.21.1",
     "starlette-cramjam>=0.4,<0.5",
     "pydantic-settings~=2.0",
+    "boto3",
+    "cftime",
 ]
 
 [project.optional-dependencies]

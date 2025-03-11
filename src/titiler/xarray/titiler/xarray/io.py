@@ -1,23 +1,31 @@
 """titiler.xarray.io"""
 
+import os
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
 import attr
+import boto3
 import numpy
+import s3fs
 import xarray
 from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 from xarray.namedarray.utils import module_available
 
+from titiler.core.auth import rewrite_https_to_s3_if_needed
+
+AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
+AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
 
 def xarray_open_dataset(  # noqa: C901
     src_path: str,
     group: Optional[str] = None,
     decode_times: bool = True,
+    request_options: Optional[Dict] = None,
 ) -> xarray.Dataset:
-    """Open Xarray dataset with fsspec.
+    """Open Xarray dataset
 
     Args:
         src_path (str): dataset path.
@@ -28,6 +36,7 @@ def xarray_open_dataset(  # noqa: C901
         xarray.Dataset
 
     """
+
     import fsspec  # noqa
 
     try:
@@ -43,12 +52,20 @@ def xarray_open_dataset(  # noqa: C901
     parsed = urlparse(src_path)
     protocol = parsed.scheme or "file"
 
+    is_kerchunk = False
+    xr_engine = None
+
+
     if any(src_path.lower().endswith(ext) for ext in [".nc", ".nc4"]):
         assert (
             h5netcdf is not None
         ), "'h5netcdf' must be installed to read NetCDF dataset"
 
         xr_engine = "h5netcdf"
+
+    # TODO: Improve. This is a temporary solution to recognise kerchunked files
+    elif src_path.lower().endswith(".json"):
+        is_kerchunk = True
 
     else:
         assert zarr is not None, "'zarr' must be installed to read Zarr dataset"
@@ -65,8 +82,13 @@ def xarray_open_dataset(  # noqa: C901
     if group is not None:
         xr_open_args["group"] = group
 
+    if is_kerchunk:
+        reference_args = {"fo": src_path}
+        fs = fsspec.filesystem("reference", **reference_args).get_mapper("")
+        ds = xarray.open_zarr(fs, **xr_open_args)
+
     # NetCDF arguments
-    if xr_engine == "h5netcdf":
+    elif xr_engine == "h5netcdf":
         xr_open_args.update(
             {
                 "engine": "h5netcdf",
@@ -76,19 +98,54 @@ def xarray_open_dataset(  # noqa: C901
         fs = fsspec.filesystem(protocol)
         ds = xarray.open_dataset(fs.open(src_path), **xr_open_args)
 
-    # Fallback to Zarr
+    # Fallback to Zarr (using the old logic)
     else:
-        if module_available("zarr", minversion="3.0"):
-            if protocol == "file":
-                store = zarr.storage.LocalStore(parsed.path, read_only=True)
+        src_path, _ = rewrite_https_to_s3_if_needed(src_path)
+        protocol = "s3"
+
+        if protocol == "s3":
+            if request_options and "Authorization" in request_options:
+                access_token = request_options.get("Authorization").removeprefix("Bearer ")
+
+                sts = boto3.client("sts")
+                creds_dict = sts.assume_role_with_web_identity(
+                    RoleArn=AWS_ROLE_ARN,
+                    RoleSessionName="titiler-core",
+                    DurationSeconds=900,
+                    WebIdentityToken=access_token,
+                )["Credentials"]
+
+                fs = s3fs.S3FileSystem(
+                    key=creds_dict["AccessKeyId"],
+                    secret=creds_dict["SecretAccessKey"],
+                    token=creds_dict["SessionToken"],
+                )
             else:
-                fs = fsspec.filesystem(protocol, storage_options={"asynchronous": True})
-                store = zarr.storage.FsspecStore(fs, path=src_path, read_only=True)
+                session = boto3.Session()
+                creds = session.get_credentials().get_frozen_credentials()
 
-        else:
-            store = fsspec.filesystem(protocol).get_mapper(src_path)
+                fs = s3fs.S3FileSystem(
+                    key=creds.access_key,
+                    secret=creds.secret_key,
+                    token=creds.token,
+                    anon=False
+                )
 
-        ds = xarray.open_zarr(store, **xr_open_args)
+        xr_open_args.update(
+            {
+                "engine": "zarr",
+            }
+        )
+
+        file_handler = fs.get_mapper(src_path)
+
+        ds = xarray.open_dataset(file_handler, consolidated=False,
+                                  **xr_open_args)
+
+        # Validate that it opened and is not empty
+        if ds.keys() == []:
+            raise ValueError(f"Unable to open dataset: {src_path}")
+    
     return ds
 
 
@@ -198,6 +255,8 @@ class Reader(XarrayReader):
     src_path: str = attr.ib()
     variable: str = attr.ib()
 
+    request_options = attr.ib(default=None)
+
     # xarray.Dataset options
     opener: Callable[..., xarray.Dataset] = attr.ib(default=xarray_open_dataset)
 
@@ -221,6 +280,7 @@ class Reader(XarrayReader):
             self.src_path,
             group=self.group,
             decode_times=self.decode_times,
+            request_options=self.request_options,
         )
 
         self.input = get_variable(
