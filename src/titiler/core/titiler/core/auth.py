@@ -1,5 +1,6 @@
 import os
 import re
+import urllib.parse
 
 import boto3
 from fastapi import Request
@@ -37,6 +38,18 @@ def is_whitelisted_url(url: str) -> bool:
         if "/public/" not in url and url.endswith('.tif') and re.match(pattern, url):
             return True
     return False
+
+
+def is_file_in_public_workspace(src_path: str) -> bool:
+    """
+    Check if the given URL is in a public
+    workspace (i.e. /public/ as the second index in the path).
+    """
+    if is_whitelisted_url(src_path):
+        parts = urllib.parse.urlparse(src_path).path.split('/')
+        print(parts)
+        if len(parts) > 2 and parts[2] == 'public':
+            return True
 
 
 def rewrite_https_to_s3_if_needed(url: str):
