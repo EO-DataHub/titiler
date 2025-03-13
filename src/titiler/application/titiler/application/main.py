@@ -142,7 +142,7 @@ if not api_settings.disable_cog:
 if not api_settings.disable_stac:
     stac = MultiBaseTilerFactory(
         reader=STACReader,
-        router_prefix="/stac",
+        router_prefix="/core/stac",
         extensions=[
             stacViewerExtension(),
             stacRenderExtension(),
@@ -151,7 +151,7 @@ if not api_settings.disable_stac:
 
     app.include_router(
         stac.router,
-        prefix="/stac",
+        prefix="/core/stac",
         tags=["SpatioTemporal Asset Catalog"],
     )
 

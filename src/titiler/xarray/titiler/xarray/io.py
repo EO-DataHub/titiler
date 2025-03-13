@@ -14,7 +14,7 @@ from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 from xarray.namedarray.utils import module_available
 
-from titiler.core.auth import rewrite_https_to_s3_if_needed
+from titiler.core.auth import rewrite_https_to_s3_if_needed, rewrite_https_to_s3_force, is_file_in_public_workspace
 
 AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
@@ -101,6 +101,9 @@ def xarray_open_dataset(  # noqa: C901
     # Fallback to Zarr (using the old logic)
     else:
         src_path, _ = rewrite_https_to_s3_if_needed(src_path)
+        if src_path.startswith("https://"):
+            src_path, _ = rewrite_https_to_s3_force(src_path)
+
         protocol = "s3"
 
         if protocol == "s3":
@@ -120,7 +123,7 @@ def xarray_open_dataset(  # noqa: C901
                     secret=creds_dict["SecretAccessKey"],
                     token=creds_dict["SessionToken"],
                 )
-            else:
+            elif is_file_in_public_workspace(src_path):
                 session = boto3.Session()
                 creds = session.get_credentials().get_frozen_credentials()
 
@@ -129,6 +132,10 @@ def xarray_open_dataset(  # noqa: C901
                     secret=creds.secret_key,
                     token=creds.token,
                     anon=False
+                )
+            else:
+                fs = s3fs.S3FileSystem(
+                    anon=True,
                 )
 
         xr_open_args.update(

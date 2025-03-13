@@ -43,7 +43,7 @@ from typing_extensions import Annotated
 
 from titiler.core.algorithm import AlgorithmMetadata, Algorithms, BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
-from titiler.core.auth import resolve_src_path_and_credentials
+from titiler.core.auth import resolve_src_path_and_credentials, rewrite_https_to_s3_force
 from titiler.core.dependencies import (
     AssetsBidxExprParams,
     AssetsBidxExprParamsOptional,
@@ -818,6 +818,8 @@ class TilerFactory(BaseFactory):
 
             extra_kwargs = {'tms': tms}
             if self.reader == XarrayReader:
+                if resolved_path.startswith("http"):
+                    resolved_path, _ = rewrite_https_to_s3_force(resolved_path)
                 extra_kwargs['request_options'] = request.headers
 
             with rasterio.Env(**updated_env):

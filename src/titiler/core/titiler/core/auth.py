@@ -1,5 +1,6 @@
 import os
 import re
+import urllib.parse
 
 import boto3
 from fastapi import Request
@@ -39,6 +40,18 @@ def is_whitelisted_url(url: str) -> bool:
     return False
 
 
+def is_file_in_public_workspace(src_path: str) -> bool:
+    """
+    Check if the given URL is in a public
+    workspace (i.e. /public/ as the second index in the path).
+    """
+    if is_whitelisted_url(src_path):
+        parts = urllib.parse.urlparse(src_path).path.split('/')
+        print(parts)
+        if len(parts) > 2 and parts[2] == 'public':
+            return True
+
+
 def rewrite_https_to_s3_if_needed(url: str):
     """
     Rewrite HTTPS URLs to S3 URLs when possible.
@@ -71,6 +84,29 @@ def rewrite_https_to_s3_if_needed(url: str):
         workspace = match.group(2)
         key_part = match.group(3)
         return (f"s3://{bucket_part}/{workspace}/{key_part}", workspace)
+
+    return (url, None)
+
+
+def rewrite_https_to_s3_force(url: str):
+    """
+    Rewrite HTTPS URLs to S3 URLs for any pattern.
+
+    Args:
+        url: The HTTPS URL to be rewritten
+
+    Returns:
+        Tuple of (s3_url, workspace)
+    """
+    https_pattern = (
+        r"^https://([\w-]+)\.s3\.[\w-]+\.amazonaws\.com/(.+)$"
+    )
+    match = re.match(https_pattern, url)
+
+    if match:
+        bucket = match.group(1)
+        key = match.group(2)
+        return (f"s3://{bucket}/{key}", None)
 
     return (url, None)
 
