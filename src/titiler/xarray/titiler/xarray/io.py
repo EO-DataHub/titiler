@@ -8,7 +8,9 @@ import attr
 import boto3
 import numpy
 import s3fs
+import re
 import xarray
+import logging
 from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
@@ -18,6 +20,12 @@ from titiler.core.auth import rewrite_https_to_s3_if_needed, rewrite_https_to_s3
 
 AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
+
+WHITELIST_PATTERNS = [
+    r"^https://workspaces-eodhp-[\w-]+\.s3\.eu-west-2\.amazonaws\.com/",
+    r"^s3://workspaces-eodhp-[\w-]+/",
+    r"^https://([\w-]+)\.([\w-]+)\.eodatahub-workspaces\.org\.uk/files/workspaces-eodhp-[\w-]+/",
+]
 
 def xarray_open_dataset(  # noqa: C901
     src_path: str,
@@ -107,7 +115,7 @@ def xarray_open_dataset(  # noqa: C901
         protocol = "s3"
 
         if protocol == "s3":
-            if request_options and "Authorization" in request_options:
+            if request_options and "Authorization" in request_options and any(re.match(pattern, src_path) for pattern in WHITELIST_PATTERNS):
                 access_token = request_options.get("Authorization").removeprefix("Bearer ")
 
                 sts = boto3.client("sts")
