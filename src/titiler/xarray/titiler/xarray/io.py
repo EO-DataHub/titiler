@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import attr
 import boto3
 import numpy
+import logging
 import s3fs
 import xarray
 from morecantile import TileMatrixSet
@@ -14,7 +15,7 @@ from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 from xarray.namedarray.utils import module_available
 
-from titiler.core.auth import rewrite_https_to_s3_if_needed, rewrite_https_to_s3_force, is_file_in_public_workspace
+from titiler.core.auth import rewrite_https_to_s3_if_needed, rewrite_https_to_s3_force, is_file_in_public_workspace, parse_file_path_and_check_access
 
 AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
@@ -103,8 +104,10 @@ def xarray_open_dataset(  # noqa: C901
         src_path, _ = rewrite_https_to_s3_if_needed(src_path)
         if src_path.startswith("https://"):
             src_path, _ = rewrite_https_to_s3_force(src_path)
-
-        protocol = "s3"
+            protocol = "s3"
+        else:
+            src_path = parse_file_path_and_check_access(src_path, request_options)
+            protocol = "file"
 
         if protocol == "s3":
             if request_options and "Authorization" in request_options:
@@ -137,6 +140,8 @@ def xarray_open_dataset(  # noqa: C901
                 fs = s3fs.S3FileSystem(
                     anon=True,
                 )
+        elif protocol == "file":
+            fs = fsspec.filesystem(protocol)
 
         xr_open_args.update(
             {

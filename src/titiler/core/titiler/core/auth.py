@@ -1,4 +1,6 @@
 import os
+import jwt
+import logging
 import re
 import urllib.parse
 
@@ -149,3 +151,50 @@ def resolve_src_path_and_credentials(
         resolved_path = src_path
 
     return resolved_path, updated_env
+
+
+def parse_file_path_and_check_access(src_path: str, request_options: dict) -> str:
+    """
+    Parses the provided file path and verifies if the user is authorised to access the specified workspace.
+    """
+
+    if not src_path.startswith("/mnt/efs"):
+        src_path = f"/mnt/efs/{src_path.lstrip('/')}"
+
+    auth_header = request_options.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise PermissionError("Missing or invalid authorization token")
+
+    token_str = auth_header.removeprefix("Bearer ")
+
+    try:
+        token = jwt.decode(token_str, options={"verify_signature": False})
+    except Exception as e:
+        logging.exception("Failed to decode JWT token")
+        raise PermissionError("Invalid token") from e
+
+    normalized_path = os.path.normpath(src_path)
+
+    # Ensure the path is still within /mnt/efs
+    base_dir = os.path.normpath("/mnt/efs")
+    if not normalized_path.startswith(base_dir):
+        logging.error("Path does not start with the expected base directory")
+        raise ValueError("Invalid file path: must reside within /mnt/efs")
+
+    # Extract the workspace segment from the path.
+    path_parts = normalized_path.split(os.sep)
+    if len(path_parts) < 4:
+        logging.error("Invalid file path structure; cannot extract workspace")
+        raise ValueError("Invalid file path structure")
+
+    workspace = path_parts[3]
+
+    # get allowed workspaces from token claims.
+    allowed_workspaces = token.get("workspaces", [])
+    allowed_member_groups = token.get("member_groups", [])
+
+    # Verify that the workspace is authorized.
+    if workspace not in allowed_workspaces and workspace not in allowed_member_groups:
+        raise PermissionError(f"Access denied for workspace: {workspace}")
+
+    return normalized_path

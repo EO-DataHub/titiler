@@ -34,6 +34,7 @@ dependencies = [
     "rio-tiler>=7.2,<8.0",
     "xarray",
     "rioxarray",
+    "PyJWT",
 ]
 
 [project.optional-dependencies]

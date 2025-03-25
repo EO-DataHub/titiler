@@ -1,5 +1,6 @@
 node_modules
 scratchpad/
+data/
 
 # Lambda deployment package
 package.zip
