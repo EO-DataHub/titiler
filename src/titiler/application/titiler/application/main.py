@@ -25,6 +25,7 @@ from titiler.core.factory import (
     MultiBaseTilerFactory,
     TilerFactory,
     TMSFactory,
+    EodhFactory,
 )
 from titiler.core.middleware import (
     CacheControlMiddleware,
@@ -99,6 +100,14 @@ app = FastAPI(
     version=titiler_version,
     root_path=api_settings.root_path,
     dependencies=app_dependencies,
+)
+
+###############################################################################
+# EODH endpoints
+eo = EodhFactory()
+app.include_router(
+    eo.router,
+    tags=["EODH"],
 )
 
 ###############################################################################

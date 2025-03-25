@@ -87,6 +87,10 @@ from titiler.core.utils import bounds_to_geometry, render_image
 
 from titiler.xarray.io import Reader as XarrayReader
 
+import requests
+import json
+from urllib.parse import urlencode
+
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
 )
@@ -2243,3 +2247,53 @@ class ColorMapFactory(BaseFactory):
                 return [(k, numpy.array(v).tolist()) for (k, v) in cmap]
             else:
                 return {k: numpy.array(v).tolist() for k, v in cmap.items()}
+
+
+
+
+# EODH Factory that contains the /eodh endpoint
+@define(kw_only=True)
+class EodhFactory(BaseFactory):
+    """Add /eodh factory."""
+
+    def register_routes(self):
+        """Register endpoint to the tiler factory."""
+
+        @self.router.get(
+            "/available_wmts",
+            name="EODH Common Utilities",
+        )
+        def return_endpoints(
+            catalog_path: Annotated[
+                Optional[str],
+                Query(
+                    description="Path to the catalog",
+                    alias="catalog_path",
+                ),
+            ] = "",
+        ):
+            """Return the endpoints."""
+
+            BASE_COLLECTIONS_ENDPOINT = 'https://staging.eodatahub.org.uk/api/catalogue/stac/collections?limit=1000'
+
+            # Get the collections
+            collections = requests.get(BASE_COLLECTIONS_ENDPOINT)
+            collections = json.loads(collections.text)['collections']
+
+            # Get the collections that have the `renders` extension
+            collections_with_renders = []
+            for collection in collections:
+                if 'renders' in collection:
+
+                    links = collection.get('links')
+                    self_link = [link for link in links if link.get('rel') == 'parent'][0].get('href')
+                    wmts_link = self_link + '/wmts?request=GetCapabilities&service=WMTS'
+
+                    collections_with_renders.append({
+                        'id': collection.get('id'),
+                        'title': collection.get('title'),
+                        'description': collection.get('description'),
+                        'wmts_link': wmts_link
+                    })
+
+            return {"available_collections" : collections_with_renders}
