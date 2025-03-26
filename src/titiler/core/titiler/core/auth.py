@@ -11,7 +11,9 @@ from rasterio.session import AWSSession
 CREDENTIALS_ENDPOINT = os.getenv(
     "CREDENTIALS_ENDPOINT", "https://staging.eodatahub.org.uk/api/workspaces/workspace-name/me/s3-tokens"
 )
-AWS_ROLE_ARN = os.getenv("AWS_ROLE_ARN")
+AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
+AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
+
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 WHITELIST_PATTERNS = [
     r"^https://workspaces-eodhp-[\w-]+\.s3\.eu-west-2\.amazonaws\.com/",
@@ -128,7 +130,7 @@ def resolve_src_path_and_credentials(
 
         sts = boto3.client("sts")
         creds = sts.assume_role_with_web_identity(
-            RoleArn=AWS_ROLE_ARN,
+            RoleArn=AWS_PRIVATE_ROLE_ARN,
             RoleSessionName="titiler-core",
             DurationSeconds=900,
             WebIdentityToken=token,
