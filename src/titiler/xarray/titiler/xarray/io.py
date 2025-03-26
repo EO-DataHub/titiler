@@ -14,10 +14,15 @@ from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 from xarray.namedarray.utils import module_available
 
-from titiler.core.auth import rewrite_https_to_s3_if_needed, rewrite_https_to_s3_force, is_file_in_public_workspace
+from titiler.core.auth import (
+    rewrite_https_to_s3_if_needed,
+    rewrite_https_to_s3_force,
+    is_file_in_public_workspace,
+)
 
 AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
+
 
 def xarray_open_dataset(  # noqa: C901
     src_path: str,
@@ -55,11 +60,10 @@ def xarray_open_dataset(  # noqa: C901
     is_kerchunk = False
     xr_engine = None
 
-
     if any(src_path.lower().endswith(ext) for ext in [".nc", ".nc4"]):
-        assert (
-            h5netcdf is not None
-        ), "'h5netcdf' must be installed to read NetCDF dataset"
+        assert h5netcdf is not None, (
+            "'h5netcdf' must be installed to read NetCDF dataset"
+        )
 
         xr_engine = "h5netcdf"
 
@@ -108,7 +112,9 @@ def xarray_open_dataset(  # noqa: C901
 
         if protocol == "s3":
             if request_options and "Authorization" in request_options:
-                access_token = request_options.get("Authorization").removeprefix("Bearer ")
+                access_token = request_options.get("Authorization").removeprefix(
+                    "Bearer "
+                )
 
                 sts = boto3.client("sts")
                 creds_dict = sts.assume_role_with_web_identity(
@@ -131,7 +137,7 @@ def xarray_open_dataset(  # noqa: C901
                     key=creds.access_key,
                     secret=creds.secret_key,
                     token=creds.token,
-                    anon=False
+                    anon=False,
                 )
             else:
                 fs = s3fs.S3FileSystem(
@@ -146,13 +152,12 @@ def xarray_open_dataset(  # noqa: C901
 
         file_handler = fs.get_mapper(src_path)
 
-        ds = xarray.open_dataset(file_handler, consolidated=False,
-                                  **xr_open_args)
+        ds = xarray.open_dataset(file_handler, consolidated=False, **xr_open_args)
 
         # Validate that it opened and is not empty
         if ds.keys() == []:
             raise ValueError(f"Unable to open dataset: {src_path}")
-    
+
     return ds
 
 
@@ -203,7 +208,7 @@ def get_variable(
     ds: xarray.Dataset,
     variable: str,
     datetime: Optional[str] = None,
-    drop_dim: Optional[str] = None,
+    drop_dim: Optional[List[str]] = None,
 ) -> xarray.DataArray:
     """Get Xarray variable as DataArray.
 
@@ -211,7 +216,7 @@ def get_variable(
         ds (xarray.Dataset): Xarray Dataset.
         variable (str): Variable to extract from the Dataset.
         datetime (str, optional): datetime to select from the DataArray.
-        drop_dim (str, optional): DataArray dimension to drop in form of `{dimension}={value}`.
+        drop_dim (list(str), optional): List of DataArray dimensions to drop in form of `{dimension}={value}`.
 
     Returns:
         xarray.DataArray: 2D or 3D DataArray.
@@ -219,9 +224,10 @@ def get_variable(
     """
     da = ds[variable]
 
-    if drop_dim:
-        dim_to_drop, dim_val = drop_dim.split("=")
-        da = da.sel({dim_to_drop: dim_val}).drop_vars(dim_to_drop)
+    if drop_dim is not None:
+        for item in drop_dim:
+            dim_to_drop, dim_val = item.split("=")
+            da = da.sel({dim_to_drop: dim_val}).drop_vars(dim_to_drop)
 
     da = _arrange_dims(da)
 
