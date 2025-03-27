@@ -15,7 +15,7 @@ from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 from xarray.namedarray.utils import module_available
 
-from titiler.core.auth import rewrite_https_to_s3_if_needed, rewrite_https_to_s3_force, is_file_in_public_workspace, parse_file_path_and_check_access
+from titiler.core.auth import rewrite_https_to_s3_if_needed, rewrite_https_to_s3_force, is_file_in_public_workspace, parse_file_path_and_check_access, is_whitelisted_url
 
 AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
@@ -101,16 +101,19 @@ def xarray_open_dataset(  # noqa: C901
 
     # Fallback to Zarr (using the old logic)
     else:
-        src_path, _ = rewrite_https_to_s3_if_needed(src_path)
-        if src_path.startswith("https://"):
-            src_path, _ = rewrite_https_to_s3_force(src_path)
+        parsed = urlparse(src_path)
+
+        if parsed.scheme != '' and parsed.netloc != '':
+            src_path, _ = rewrite_https_to_s3_if_needed(src_path)
             protocol = "s3"
+            if src_path.startswith("https://") or src_path.startswith("http://"):
+                src_path, _ = rewrite_https_to_s3_force(src_path)
         else:
             src_path = parse_file_path_and_check_access(src_path, request_options)
             protocol = "file"
 
         if protocol == "s3":
-            if request_options and "Authorization" in request_options:
+            if request_options and "Authorization" in request_options and is_whitelisted_url(src_path) and not is_file_in_public_workspace(src_path):
                 access_token = request_options.get("Authorization").removeprefix("Bearer ")
 
                 sts = boto3.client("sts")

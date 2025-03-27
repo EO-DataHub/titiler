@@ -818,7 +818,7 @@ class TilerFactory(BaseFactory):
 
             extra_kwargs = {'tms': tms}
             if self.reader == XarrayReader:
-                if resolved_path.startswith("http"):
+                if resolved_path.startswith("http") and not resolved_path.endswith(".json"):
                     resolved_path, _ = rewrite_https_to_s3_force(resolved_path)
                 extra_kwargs['request_options'] = request.headers
 

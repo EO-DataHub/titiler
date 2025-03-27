@@ -11,7 +11,7 @@ from rasterio.session import AWSSession
 CREDENTIALS_ENDPOINT = os.getenv(
     "CREDENTIALS_ENDPOINT", "https://staging.eodatahub.org.uk/api/workspaces/workspace-name/me/s3-tokens"
 )
-AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
+AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
 
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
@@ -39,7 +39,7 @@ def is_whitelisted_url(url: str) -> bool:
     If yes, we want to attach ephemeral S3 credentials.
     """
     for pattern in WHITELIST_PATTERNS:
-        if "/public/" not in url and url.endswith('.tif') and re.match(pattern, url):
+        if re.match(pattern, url):
             return True
     return False
 
@@ -124,7 +124,7 @@ def resolve_src_path_and_credentials(
     updated_env = dict(gdal_env)
 
     # 1. Check if URL is in our "whitelist" (either https:// or s3:// for workspaces-eodhp-*)
-    if is_whitelisted_url(src_path):
+    if is_whitelisted_url(src_path) and not is_file_in_public_workspace(src_path):
         resolved_path, workspace = rewrite_https_to_s3_if_needed(src_path)
         token = request.headers.get("Authorization").removeprefix("Bearer ")
 
