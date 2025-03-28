@@ -15,153 +15,104 @@ from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 from xarray.namedarray.utils import module_available
 
-from titiler.core.auth import rewrite_https_to_s3_if_needed, rewrite_https_to_s3_force, is_file_in_public_workspace, parse_file_path_and_check_access, is_whitelisted_url
+from titiler.core.auth import is_file_in_public_workspace, is_whitelisted_url
 
-AWS_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
-AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
+AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 
-def xarray_open_dataset(  # noqa: C901
+
+def get_s3_filesystem(src_path: str, auth_token: Optional[str] = None) -> s3fs.S3FileSystem:
+    """Return appropriate S3FileSystem based on authorization and URL type."""
+    if auth_token and is_whitelisted_url(src_path) and not is_file_in_public_workspace(src_path):
+        sts = boto3.client("sts")
+        creds = sts.assume_role_with_web_identity(
+            RoleArn=AWS_PRIVATE_ROLE_ARN,
+            RoleSessionName="titiler-core",
+            DurationSeconds=900,
+            WebIdentityToken=auth_token,
+        )["Credentials"]
+        return s3fs.S3FileSystem(
+            key=creds["AccessKeyId"],
+            secret=creds["SecretAccessKey"],
+            token=creds["SessionToken"],
+        )
+
+    elif is_file_in_public_workspace(src_path):
+        session = boto3.Session()
+        creds = session.get_credentials().get_frozen_credentials()
+        return s3fs.S3FileSystem(
+            key=creds.access_key,
+            secret=creds.secret_key,
+            token=creds.token,
+            anon=False
+        )
+
+    return s3fs.S3FileSystem(anon=True)
+
+
+def xarray_open_dataset(
     src_path: str,
     group: Optional[str] = None,
     decode_times: bool = True,
     request_options: Optional[Dict] = None,
 ) -> xarray.Dataset:
-    """Open Xarray dataset
-
-    Args:
-        src_path (str): dataset path.
-        group (Optional, str): path to the netCDF/Zarr group in the given file to open given as a str.
-        decode_times (bool):  If True, decode times encoded in the standard NetCDF datetime format into datetime objects. Otherwise, leave them encoded as numbers.
-
-    Returns:
-        xarray.Dataset
-
-    """
+    """Open Xarray dataset from various sources (NetCDF, Zarr, Kerchunk)."""
 
     import fsspec  # noqa
 
     try:
         import h5netcdf
     except ImportError:  # pragma: nocover
-        h5netcdf = None  # type: ignore
+        logging.warning("h5netcdf not installed")
 
     try:
         import zarr
     except ImportError:  # pragma: nocover
-        zarr = None  # type: ignore
+        logging.warning("zarr not installed")
 
     parsed = urlparse(src_path)
     protocol = parsed.scheme or "file"
+    auth_token = (
+        request_options.get("Authorization", "")
+        if request_options and "Authorization" in request_options
+        else ""
+    )
+    auth_token = auth_token.removeprefix("Bearer ")
 
-    is_kerchunk = False
-    xr_engine = None
-
-
-    if any(src_path.lower().endswith(ext) for ext in [".nc", ".nc4"]):
-        assert (
-            h5netcdf is not None
-        ), "'h5netcdf' must be installed to read NetCDF dataset"
-
-        xr_engine = "h5netcdf"
-
-    # TODO: Improve. This is a temporary solution to recognise kerchunked files
-    elif src_path.lower().endswith(".json"):
-        is_kerchunk = True
-
-    else:
-        assert zarr is not None, "'zarr' must be installed to read Zarr dataset"
-        xr_engine = "zarr"
-
-    # Arguments for xarray.open_dataset
-    # Default args
     xr_open_args: Dict[str, Any] = {
         "decode_coords": "all",
         "decode_times": decode_times,
     }
-
-    # Argument if we're opening a datatree
-    if group is not None:
+    if group:
         xr_open_args["group"] = group
 
-    if is_kerchunk:
-        reference_args = {"fo": src_path}
-        fs = fsspec.filesystem("reference", **reference_args).get_mapper("")
-        ds = xarray.open_zarr(fs, **xr_open_args)
+    # Kerchunk datasets (JSON references)
+    if src_path.lower().endswith(".json"):
+        fs = fsspec.filesystem("reference", fo=src_path).get_mapper("")
+        return xarray.open_zarr(fs, **xr_open_args)
 
-    # NetCDF arguments
-    elif xr_engine == "h5netcdf":
-        xr_open_args.update(
-            {
-                "engine": "h5netcdf",
-                "lock": False,
-            }
-        )
+    # NetCDF files
+    elif any(src_path.lower().endswith(ext) for ext in [".nc", ".nc4"]):
         fs = fsspec.filesystem(protocol)
-        ds = xarray.open_dataset(fs.open(src_path), **xr_open_args)
+        xr_open_args.update({"engine": "h5netcdf", "lock": False})
+        with fs.open(src_path) as file:
+            return xarray.open_dataset(file, **xr_open_args)
 
-    # Fallback to Zarr (using the old logic)
+    # Zarr datasets
     else:
-        parsed = urlparse(src_path)
+        xr_open_args["engine"] = "zarr"
 
-        if parsed.scheme != '' and parsed.netloc != '':
-            src_path, _ = rewrite_https_to_s3_if_needed(src_path)
-            protocol = "s3"
-            if src_path.startswith("https://") or src_path.startswith("http://"):
-                src_path, _ = rewrite_https_to_s3_force(src_path)
+        if protocol == "file":
+            fs = fsspec.filesystem("file")
         else:
-            src_path = parse_file_path_and_check_access(src_path, request_options)
-            protocol = "file"
+            fs = get_s3_filesystem(src_path, auth_token)
 
-        if protocol == "s3":
-            if request_options and "Authorization" in request_options and is_whitelisted_url(src_path) and not is_file_in_public_workspace(src_path):
-                access_token = request_options.get("Authorization").removeprefix("Bearer ")
+        mapper = fs.get_mapper(src_path)
+        ds = xarray.open_dataset(mapper, consolidated=False, **xr_open_args)
 
-                sts = boto3.client("sts")
-                creds_dict = sts.assume_role_with_web_identity(
-                    RoleArn=AWS_ROLE_ARN,
-                    RoleSessionName="titiler-core",
-                    DurationSeconds=900,
-                    WebIdentityToken=access_token,
-                )["Credentials"]
+        if not ds.keys():
+            raise ValueError(f"Unable to open dataset or dataset is empty: {src_path}")
 
-                fs = s3fs.S3FileSystem(
-                    key=creds_dict["AccessKeyId"],
-                    secret=creds_dict["SecretAccessKey"],
-                    token=creds_dict["SessionToken"],
-                )
-            elif is_file_in_public_workspace(src_path):
-                session = boto3.Session()
-                creds = session.get_credentials().get_frozen_credentials()
-
-                fs = s3fs.S3FileSystem(
-                    key=creds.access_key,
-                    secret=creds.secret_key,
-                    token=creds.token,
-                    anon=False
-                )
-            else:
-                fs = s3fs.S3FileSystem(
-                    anon=True,
-                )
-        elif protocol == "file":
-            fs = fsspec.filesystem(protocol)
-
-        xr_open_args.update(
-            {
-                "engine": "zarr",
-            }
-        )
-
-        file_handler = fs.get_mapper(src_path)
-
-        ds = xarray.open_dataset(file_handler, consolidated=False,
-                                  **xr_open_args)
-
-        # Validate that it opened and is not empty
-        if ds.keys() == []:
-            raise ValueError(f"Unable to open dataset: {src_path}")
-    
-    return ds
+        return ds
 
 
 def _arrange_dims(da: xarray.DataArray) -> xarray.DataArray:

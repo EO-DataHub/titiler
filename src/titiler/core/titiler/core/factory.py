@@ -40,6 +40,7 @@ from starlette.responses import HTMLResponse, Response
 from starlette.routing import Match, NoMatchFound, compile_path, replace_params
 from starlette.templating import Jinja2Templates
 from typing_extensions import Annotated
+import logging
 
 from titiler.core.algorithm import AlgorithmMetadata, Algorithms, BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
@@ -813,10 +814,9 @@ class TilerFactory(BaseFactory):
         ):
             """Create map tile from a dataset."""
             tms = self.supported_tms.get(tileMatrixSetId)
-
             resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
-
             extra_kwargs = {'tms': tms}
+
             if self.reader == XarrayReader:
                 if resolved_path.startswith("http") and not resolved_path.endswith(".json"):
                     resolved_path, _ = rewrite_https_to_s3_force(resolved_path)

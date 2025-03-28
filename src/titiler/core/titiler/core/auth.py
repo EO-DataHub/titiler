@@ -3,6 +3,7 @@ import jwt
 import logging
 import re
 import urllib.parse
+from urllib.parse import urlparse
 
 import boto3
 from fastapi import Request
@@ -122,11 +123,15 @@ def resolve_src_path_and_credentials(
 ) -> tuple[str, dict]:
 
     updated_env = dict(gdal_env)
+    parsed = urlparse(src_path)
 
     # 1. Check if URL is in our "whitelist" (either https:// or s3:// for workspaces-eodhp-*)
     if is_whitelisted_url(src_path) and not is_file_in_public_workspace(src_path):
         resolved_path, workspace = rewrite_https_to_s3_if_needed(src_path)
-        token = request.headers.get("Authorization").removeprefix("Bearer ")
+        token = request.headers.get("Authorization", "")
+        if not token:
+            raise PermissionError("Missing authorization token. The Workspace API key is either missing or invalid.")
+        token = token.removeprefix("Bearer ")
 
         sts = boto3.client("sts")
         creds = sts.assume_role_with_web_identity(
@@ -149,8 +154,10 @@ def resolve_src_path_and_credentials(
         updated_env.pop("AWS_SESSION_TOKEN", None)
         updated_env["session"] = aws_session
 
-    else:
+    elif parsed.scheme != '' and parsed.netloc != '':
         resolved_path = src_path
+    else:
+        resolved_path = parse_file_path_and_check_access(src_path, request.headers)
 
     return resolved_path, updated_env
 
