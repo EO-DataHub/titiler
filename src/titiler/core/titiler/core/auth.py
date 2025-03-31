@@ -13,7 +13,6 @@ CREDENTIALS_ENDPOINT = os.getenv(
     "CREDENTIALS_ENDPOINT", "https://staging.eodatahub.org.uk/api/workspaces/workspace-name/me/s3-tokens"
 )
 AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
-AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN")
 
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 WHITELIST_PATTERNS = [
