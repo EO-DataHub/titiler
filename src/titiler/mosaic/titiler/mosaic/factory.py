@@ -31,6 +31,7 @@ from typing_extensions import Annotated
 
 from titiler.core.algorithm import BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
+from titiler.core.auth import resolve_src_path_and_credentials
 from titiler.core.dependencies import (
     BidxExprParams,
     ColorMapParams,
@@ -153,15 +154,18 @@ class MosaicTilerFactory(BaseFactory):
             responses={200: {"description": "Return MosaicJSON definition"}},
         )
         def read(
+            request: Request,
             src_path=Depends(self.path_dependency),
             backend_params=Depends(self.backend_dependency),
             reader_params=Depends(self.reader_dependency),
             env=Depends(self.environment_dependency),
         ):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+
             """Read a MosaicJSON"""
-            with rasterio.Env(**env):
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
@@ -180,6 +184,7 @@ class MosaicTilerFactory(BaseFactory):
             responses={200: {"description": "Return the bounds of the MosaicJSON"}},
         )
         def bounds(
+            request: Request,
             src_path=Depends(self.path_dependency),
             backend_params=Depends(self.backend_dependency),
             reader_params=Depends(self.reader_dependency),
@@ -187,9 +192,10 @@ class MosaicTilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return the bounds of the MosaicJSON."""
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
@@ -212,15 +218,17 @@ class MosaicTilerFactory(BaseFactory):
             responses={200: {"description": "Return info about the MosaicJSON"}},
         )
         def info(
+            request: Request,
             src_path=Depends(self.path_dependency),
             backend_params=Depends(self.backend_dependency),
             reader_params=Depends(self.reader_dependency),
             env=Depends(self.environment_dependency),
         ):
             """Return basic info."""
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
@@ -240,6 +248,7 @@ class MosaicTilerFactory(BaseFactory):
             },
         )
         def info_geojson(
+            request: Request,
             src_path=Depends(self.path_dependency),
             backend_params=Depends(self.backend_dependency),
             reader_params=Depends(self.reader_dependency),
@@ -247,9 +256,10 @@ class MosaicTilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return mosaic's basic info as a GeoJSON feature."""
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
@@ -293,9 +303,10 @@ class MosaicTilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Retrieve a list of available raster tilesets for the specified dataset."""
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
@@ -390,9 +401,10 @@ class MosaicTilerFactory(BaseFactory):
         ):
             """Retrieve the raster tileset metadata for the specified dataset and tiling scheme (tile matrix set)."""
             tms = self.supported_tms.get(tileMatrixSetId)
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     tms=tms,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
@@ -519,6 +531,7 @@ class MosaicTilerFactory(BaseFactory):
             **img_endpoint_params,
         )
         def tile(
+            request: Request,
             z: Annotated[
                 int,
                 Path(
@@ -573,9 +586,10 @@ class MosaicTilerFactory(BaseFactory):
                 )
 
             tms = self.supported_tms.get(tileMatrixSetId)
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     tms=tms,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
@@ -694,9 +708,10 @@ class MosaicTilerFactory(BaseFactory):
                 tiles_url += f"?{urlencode(qs)}"
 
             tms = self.supported_tms.get(tileMatrixSetId)
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     tms=tms,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
@@ -857,9 +872,10 @@ class MosaicTilerFactory(BaseFactory):
             ]
 
             tms = self.supported_tms.get(tileMatrixSetId)
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     tms=tms,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
@@ -939,7 +955,7 @@ class MosaicTilerFactory(BaseFactory):
             responses={200: {"description": "Return a value for a point"}},
         )
         def point(
-            response: Response,
+            request: Request,
             lon: Annotated[float, Path(description="Longitude")],
             lat: Annotated[float, Path(description="Latitude")],
             src_path=Depends(self.path_dependency),
@@ -951,9 +967,10 @@ class MosaicTilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Get Point value for a Mosaic."""
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
@@ -990,6 +1007,7 @@ class MosaicTilerFactory(BaseFactory):
             responses={200: {"description": "Return list of COGs in bounding box"}},
         )
         def assets_for_bbox(
+            request: Request,
             minx: Annotated[float, Path(description="Bounding box min X")],
             miny: Annotated[float, Path(description="Bounding box min Y")],
             maxx: Annotated[float, Path(description="Bounding box max X")],
@@ -1001,9 +1019,10 @@ class MosaicTilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return a list of assets which overlap a bounding box"""
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
@@ -1021,6 +1040,7 @@ class MosaicTilerFactory(BaseFactory):
             responses={200: {"description": "Return list of COGs"}},
         )
         def assets_for_lon_lat(
+            request: Request,
             lon: Annotated[float, Path(description="Longitude")],
             lat: Annotated[float, Path(description="Latitude")],
             src_path=Depends(self.path_dependency),
@@ -1030,9 +1050,10 @@ class MosaicTilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return a list of assets which overlap a point"""
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),
                     **backend_params.as_dict(),
@@ -1048,6 +1069,7 @@ class MosaicTilerFactory(BaseFactory):
             responses={200: {"description": "Return list of COGs"}},
         )
         def assets_for_tile(
+            request: Request,
             tileMatrixSetId: Annotated[
                 Literal[tuple(self.supported_tms.list())],
                 Path(
@@ -1079,9 +1101,10 @@ class MosaicTilerFactory(BaseFactory):
         ):
             """Return a list of assets which overlap a given tile"""
             tms = self.supported_tms.get(tileMatrixSetId)
-            with rasterio.Env(**env):
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            with rasterio.Env(**updated_env):
                 with self.backend(
-                    src_path,
+                    resolved_path,
                     tms=tms,
                     reader=self.dataset_reader,
                     reader_options=reader_params.as_dict(),

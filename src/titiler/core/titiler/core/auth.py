@@ -93,7 +93,7 @@ def rewrite_https_to_s3_if_needed(url: str):
     return (url, None)
 
 
-def rewrite_https_to_s3_force(url: str):
+def rewrite_https_to_s3_force(url: str) -> str:
     """
     Rewrite HTTPS URLs to S3 URLs for any pattern.
 
@@ -101,7 +101,7 @@ def rewrite_https_to_s3_force(url: str):
         url: The HTTPS URL to be rewritten
 
     Returns:
-        Tuple of (s3_url, workspace)
+        String of (s3_url)
     """
     https_pattern = (
         r"^https://([\w-]+)\.s3\.[\w-]+\.amazonaws\.com/(.+)$"
@@ -111,9 +111,9 @@ def rewrite_https_to_s3_force(url: str):
     if match:
         bucket = match.group(1)
         key = match.group(2)
-        return (f"s3://{bucket}/{key}", None)
+        return f"s3://{bucket}/{key}"
 
-    return (url, None)
+    return url
 
 
 def resolve_src_path_and_credentials(

@@ -13,9 +13,8 @@ import xarray
 from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
-from xarray.namedarray.utils import module_available
 
-from titiler.core.auth import is_file_in_public_workspace, is_whitelisted_url
+from titiler.core.auth import is_file_in_public_workspace, is_whitelisted_url, rewrite_https_to_s3_force
 
 AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 
@@ -104,6 +103,8 @@ def xarray_open_dataset(
         if protocol == "file":
             fs = fsspec.filesystem("file")
         else:
+            if src_path.startswith("http"):
+                src_path = rewrite_https_to_s3_force(src_path)
             fs = get_s3_filesystem(src_path, auth_token)
 
         mapper = fs.get_mapper(src_path)
