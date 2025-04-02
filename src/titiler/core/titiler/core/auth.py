@@ -145,7 +145,7 @@ def resolve_src_path_and_credentials(
     updated_env = dict(gdal_env)
     parsed = urlparse(src_path)
 
-    # 1) Whitelisted and private (assume user's AWS role)
+    # 1) Whitelisted and auth header present (use AWS role assumption)
     if is_whitelisted_url(src_path) and auth_token_in_request_header(request.headers):
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
         auth_header = request.headers.get("Authorization", "")
@@ -160,7 +160,7 @@ def resolve_src_path_and_credentials(
         aws_session = AWSSession(boto_session, requester_pays=False)
         updated_env["session"] = aws_session
 
-    # 2) Whitelisted and public (use service account credentials)
+    # 2) Whitelisted, in public workspace segment and no auth headers supplied (use service account credentials)
     elif is_file_in_public_workspace(src_path) and not auth_token_in_request_header(request.headers):
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
         boto_session = boto3.Session()

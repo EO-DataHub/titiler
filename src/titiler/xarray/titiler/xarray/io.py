@@ -24,7 +24,7 @@ def get_s3_filesystem(src_path: str, request_options: Optional[Dict] = None) -> 
     Returns an S3FileSystem tailored to the URL type and authorisation token, if given.
     This is primarily used for Zarr datasets, which need a file-system-level view of data.
 
-    If the path is whitelisted and not public, this function assumes the private AWS role.
+    If the path is whitelisted and auth headers supplied then it uses the AWS private role.
     If the path is public, it uses the default service account credentials.
     Otherwise, an anonymous S3FileSystem is returned.
     """
