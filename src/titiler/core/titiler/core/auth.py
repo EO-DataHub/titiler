@@ -49,28 +49,19 @@ GENERAL_HTTPS_PATTERN = re.compile(
 )
 
 
-def force_no_irsa() -> None:
-    """
-    Remove environment variables that cause botocore/boto3 to attempt
-    STS AssumeRoleWithWebIdentity for IRSA (EKS). This ensures we rely
-    ONLY on the ephemeral credentials we fetch below.
-    """
-    for var in ("AWS_ROLE_ARN", "AWS_WEB_IDENTITY_TOKEN_FILE"):
-        os.environ.pop(var, None)
-
-
 def is_whitelisted_url(url: str) -> bool:
     """
     Check if the given URL matches ANY of the patterns in WHITELIST_PATTERNS.
-    If yes, we want to attach ephemeral S3 credentials.
+    Whitelisted URLs might require special S3 credentials.
     """
     return any(p.match(url) for p in WHITELIST_PATTERNS)
 
 
 def is_file_in_public_workspace(src_path: str) -> bool:
     """
-    Check if the given URL is in a public
-    workspace (i.e. /public/ as the second index in the path).
+    Determines if the URL points to a file in a public workspace.
+    In this context, a path is considered public if '/public/' is
+    the second segment in the URL path.
     """
     if is_whitelisted_url(src_path):
         parts = urllib.parse.urlparse(src_path).path.split("/")
@@ -80,15 +71,8 @@ def is_file_in_public_workspace(src_path: str) -> bool:
 
 def rewrite_https_to_s3_if_needed(url: str) -> Tuple[str, Optional[str]]:
     """
-    Rewrite HTTPS URLs to S3 URLs when possible.
-    For a URL of the form:
-      https://workspaces-eodhp-<env>.s3.eu-west-2.amazonaws.com/<key>
-    it returns:
-      s3://workspaces-eodhp-<env>/<key>
-    And for the new style:
-      https://<subdomain>.<env>.eodatahub-workspaces.org.uk/files/workspaces-eodhp-<env>/<key>
-    it returns:
-      s3://workspaces-eodhp-<env>/<subdomain>/<key>
+    Converts certain HTTPS URLs to S3 URLs if they match known workspace patterns.
+    Returns the rewritten S3 path and the subdomain or workspace name, if applicable.
     """
     if match := EODH_WORKSPACE_URL_PATTERN.match(url):
         return (
@@ -105,13 +89,8 @@ def rewrite_https_to_s3_if_needed(url: str) -> Tuple[str, Optional[str]]:
 
 def rewrite_https_to_s3_force(url: str) -> str:
     """
-    Rewrite HTTPS URLs to S3 URLs for any pattern.
-
-    Args:
-        url: The HTTPS URL to be rewritten
-
-    Returns:
-        String of (s3_url)
+    Forces conversion of an HTTPS URL to S3 format if it matches
+    a general Amazon S3 HTTPS pattern, else returns the original URL.
     """
     if match := GENERAL_HTTPS_PATTERN.match(url):
         return f"s3://{match['bucket']}/{match['key']}"
@@ -119,7 +98,10 @@ def rewrite_https_to_s3_force(url: str) -> str:
 
 
 def assume_aws_role_with_token(token: str) -> boto3.Session:
-    """Assume AWS role using web identity token; returns AWS Session."""
+    """
+    Uses a web identity token to assume the AWS private role,
+    returning a boto3 Session configured with temporary credentials.
+    """
     sts = boto3.client("sts")
     creds = sts.assume_role_with_web_identity(
         RoleArn=AWS_PRIVATE_ROLE_ARN,
@@ -140,10 +122,21 @@ def resolve_src_path_and_credentials(
     request: Request,
     gdal_env: dict,
 ) -> Tuple[str, dict]:
-    """Resolve path and AWS credentials depending on source URL and authorization."""
+    """
+    Resolves the given source path and determines the correct AWS credentials (if any).
+    This covers four scenarios:
+      1) A whitelisted S3/HTTPS URL (requires an AWS role assumption if not public).
+      2) A public workspace URL (uses service account credentials).
+      3) A non-DataHub URL (passed through as-is).
+      4) A local EFS path (checks workspace authorisation via JWT claims).
+
+    Returns:
+        A tuple of (resolved_path, updated_gdal_environment).
+    """
     updated_env = dict(gdal_env)
     parsed = urlparse(src_path)
 
+    # 1) Whitelisted and private (assume user's AWS role)
     if is_whitelisted_url(src_path) and not is_file_in_public_workspace(src_path):
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
         auth_header = request.headers.get("Authorization", "")
@@ -156,14 +149,20 @@ def resolve_src_path_and_credentials(
         token = auth_header.removeprefix("Bearer ")
         boto_session = assume_aws_role_with_token(token)
         aws_session = AWSSession(boto_session, requester_pays=False)
-        updated_env.pop("AWS_ACCESS_KEY_ID", None)
-        updated_env.pop("AWS_SECRET_ACCESS_KEY", None)
-        updated_env.pop("AWS_SESSION_TOKEN", None)
         updated_env["session"] = aws_session
 
+    # 2) Whitelisted and public (use service account credentials)
+    elif is_whitelisted_url(src_path) and is_file_in_public_workspace(src_path):
+        resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
+        boto_session = boto3.Session()
+        aws_session = AWSSession(boto_session, requester_pays=False)
+        updated_env["session"] = aws_session
+
+    # 3) Non-DataHub URL (S3/HTTPS/etc.)
     elif parsed.scheme and parsed.netloc:
         resolved_path = src_path
 
+    # 4) Local EFS path (check JWT and normalise path)
     else:
         workspace, path = parse_efs_path(src_path)
         claims = decode_jwt_token(request.headers.get("Authorization", ""))
@@ -178,7 +177,10 @@ def resolve_src_path_and_credentials(
 
 
 def parse_efs_path(src_path: str) -> Tuple[str, str]:
-    """Parse EFS path into workspace and relative path components."""
+    """
+    Extracts the workspace name and relative path from an EFS path,
+    ensuring it matches the expected format or raises an HTTPException.
+    """
     if not src_path.startswith("/mnt/efs"):
         src_path = f"/mnt/efs/{src_path.lstrip('/')}"
 
@@ -193,12 +195,17 @@ def parse_efs_path(src_path: str) -> Tuple[str, str]:
 
 
 def is_workspace_authorized(workspace: str, claims: dict) -> bool:
-    """Verify if the JWT claims authorize access to the workspace."""
+    """
+    Checks if the given JWT claims permit access to the specified workspace.
+    """
     return workspace in claims.get("workspaces", [])
 
 
 def decode_jwt_token(auth_header: str) -> dict:
-    """Decode JWT token from Authorization header without signature verification."""
+    """
+    Decodes a JWT token from the 'Authorization' header without verifying the signature.
+    Raises an HTTPException if the token is missing or invalid.
+    """
     if not auth_header.startswith("Bearer "):
         raise HTTPException(
             status_code=403,

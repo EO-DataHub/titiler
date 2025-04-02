@@ -20,7 +20,14 @@ AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 
 
 def get_s3_filesystem(src_path: str, auth_token: Optional[str] = None) -> s3fs.S3FileSystem:
-    """Return appropriate S3FileSystem based on authorization and URL type."""
+    """
+    Returns an S3FileSystem tailored to the URL type and authorisation token, if given.
+    This is primarily used for Zarr datasets, which need a file-system-level view of data.
+
+    If the path is whitelisted and not public, this function assumes the private AWS role.
+    If the path is public, it uses the default service account credentials.
+    Otherwise, an anonymous S3FileSystem is returned.
+    """
     if auth_token and is_whitelisted_url(src_path) and not is_file_in_public_workspace(src_path):
         sts = boto3.client("sts")
         creds = sts.assume_role_with_web_identity(
@@ -54,8 +61,19 @@ def xarray_open_dataset(
     decode_times: bool = True,
     request_options: Optional[Dict] = None,
 ) -> xarray.Dataset:
-    """Open Xarray dataset from various sources (NetCDF, Zarr, Kerchunk)."""
+    """
+    Opens an Xarray dataset from various sources, including NetCDF, Zarr, and Kerchunk references.
+    Automatically picks the right engine and sets up credentials if needed.
+    
+    Args:
+        src_path (str): The path or URL to open (local, S3, HTTPS, or JSON reference).
+        group (str, optional): The sub-dataset or group within the file.
+        decode_times (bool): Whether to decode time coordinates.
+        request_options (dict, optional): Extra request options, e.g., authorisation headers.
 
+    Returns:
+        xarray.Dataset: The opened dataset.
+    """
     import fsspec  # noqa
 
     try:
