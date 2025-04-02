@@ -10,24 +10,35 @@ import boto3
 from fastapi import Request
 from rasterio.session import AWSSession
 
+from fastapi import HTTPException
+
 CREDENTIALS_ENDPOINT = os.getenv("CREDENTIALS_ENDPOINT", "")
 AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 
-NEW_STYLE_HTTPS_PATTERN = re.compile(
-    r"^https://(?P<subdomain>[\w-]+)\.(?P<env>[\w-]+)\.eodatahub-workspaces\.org\.uk/files/(?P<bucket>workspaces-eodhp-[\w-]+)/(?P<key>.+)$"
+EODH_WORKSPACE_URL_PATTERN = re.compile(
+    os.getenv(
+        "EODH_WORKSPACE_URL_PATTERN",
+        ""
+    )
 )
-LEGACY_HTTPS_PATTERN = re.compile(
-    r"^https://(?P<bucket>workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(?P<workspace>[\w-]+)/(?P<key>.+)$"
+EODH_S3_HTTPS_PATTERN = re.compile(
+    os.getenv(
+        "EODH_S3_HTTPS_PATTERN",
+        ""
+    )
 )
-S3_BUCKET_PATTERN = re.compile(
-    r"^s3://workspaces-eodhp-[\w-]+/"
+EODH_S3_BUCKET_PATTERN = re.compile(
+    os.getenv(
+        "EODH_S3_BUCKET_PATTERN",
+        r"^s3://workspaces-eodhp-[\w-]+/"
+    )
 )
 
 WHITELIST_PATTERNS = [
-    NEW_STYLE_HTTPS_PATTERN,
-    LEGACY_HTTPS_PATTERN,
-    S3_BUCKET_PATTERN,
+    EODH_WORKSPACE_URL_PATTERN,
+    EODH_S3_HTTPS_PATTERN,
+    EODH_S3_BUCKET_PATTERN,
 ]
 
 
@@ -79,12 +90,12 @@ def rewrite_https_to_s3_if_needed(url: str) -> Tuple[str, Optional[str]]:
     it returns:
       s3://workspaces-eodhp-<env>/<subdomain>/<key>
     """
-    if match := NEW_STYLE_HTTPS_PATTERN.match(url):
+    if match := EODH_WORKSPACE_URL_PATTERN.match(url):
         return (
             f"s3://{match['bucket']}/{match['subdomain']}/{match['key']}",
             match["subdomain"],
         )
-    if match := LEGACY_HTTPS_PATTERN.match(url):
+    if match := EODH_S3_HTTPS_PATTERN.match(url):
         return (
             f"s3://{match['bucket']}/{match['workspace']}/{match['key']}",
             match["workspace"],
@@ -137,7 +148,10 @@ def resolve_src_path_and_credentials(
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
-            raise PermissionError("Missing authorization token")
+            raise HTTPException(
+                status_code=403,
+                detail="Missing authorization token",
+            )
 
         token = auth_header.removeprefix("Bearer ")
         boto_session = assume_aws_role_with_token(token)
@@ -151,9 +165,14 @@ def resolve_src_path_and_credentials(
         resolved_path = src_path
 
     else:
-        resolved_path = parse_and_authorize(
-            src_path, request.headers.get("Authorization", "")
-        )
+        workspace, path = parse_efs_path(src_path)
+        claims = decode_jwt_token(request.headers.get("Authorization", ""))
+        if not is_workspace_authorized(workspace, claims):
+            raise HTTPException(
+                status_code=403,
+                detail="Unauthorized access to workspace",
+            )
+        resolved_path = os.path.normpath(f"/mnt/efs/{workspace}/{path}")
 
     return resolved_path, updated_env
 
@@ -167,7 +186,10 @@ def parse_efs_path(src_path: str) -> Tuple[str, str]:
     match = EFS_PATH_PATTERN.match(normalized_path)
     if match:
         return match.group("workspace"), match.group("path")
-    raise ValueError(f"Invalid file path: {src_path}")
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid EFS path format",
+    )
 
 
 def is_workspace_authorized(workspace: str, claims: dict) -> bool:
@@ -178,20 +200,17 @@ def is_workspace_authorized(workspace: str, claims: dict) -> bool:
 def decode_jwt_token(auth_header: str) -> dict:
     """Decode JWT token from Authorization header without signature verification."""
     if not auth_header.startswith("Bearer "):
-        raise PermissionError("Missing or invalid authorization token")
+        raise HTTPException(
+            status_code=403,
+            detail="Missing authorization token",
+        )
 
     token_str = auth_header.removeprefix("Bearer ")
     try:
         return jwt.decode(token_str, options={"verify_signature": False})
     except jwt.DecodeError as e:
         logging.exception("Failed to decode JWT token")
-        raise PermissionError("Invalid token") from e
-
-
-def parse_and_authorize(src_path: str, auth_header: str) -> str:
-    """Authorize access to EFS path based on workspace claims in JWT."""
-    workspace, path = parse_efs_path(src_path)
-    claims = decode_jwt_token(auth_header)
-    if not is_workspace_authorized(workspace, claims):
-        raise PermissionError(f"Access denied for workspace: {workspace}")
-    return os.path.normpath(f"/mnt/efs/{workspace}/{path}")
+        raise HTTPException(
+            status_code=403,
+            detail="Invalid token",
+        ) from e

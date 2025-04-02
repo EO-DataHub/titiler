@@ -105,9 +105,6 @@ def xarray_open_dataset(
         mapper = fs.get_mapper(src_path)
         ds = xarray.open_dataset(mapper, consolidated=False, **xr_open_args)
 
-        if not ds.keys():
-            raise ValueError(f"Unable to open dataset or dataset is empty: {src_path}")
-
         return ds
 
 
