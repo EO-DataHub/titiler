@@ -14,12 +14,12 @@ from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 
-from titiler.core.auth import is_file_in_public_workspace, is_whitelisted_url, rewrite_https_to_s3_force
+from titiler.core.auth import is_file_in_public_workspace, is_whitelisted_url, rewrite_https_to_s3_force, auth_token_in_request_header
 
 AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 
 
-def get_s3_filesystem(src_path: str, auth_token: Optional[str] = None) -> s3fs.S3FileSystem:
+def get_s3_filesystem(src_path: str, request_options: Optional[Dict] = None) -> s3fs.S3FileSystem:
     """
     Returns an S3FileSystem tailored to the URL type and authorisation token, if given.
     This is primarily used for Zarr datasets, which need a file-system-level view of data.
@@ -28,13 +28,13 @@ def get_s3_filesystem(src_path: str, auth_token: Optional[str] = None) -> s3fs.S
     If the path is public, it uses the default service account credentials.
     Otherwise, an anonymous S3FileSystem is returned.
     """
-    if auth_token and is_whitelisted_url(src_path) and not is_file_in_public_workspace(src_path):
+    if is_whitelisted_url(src_path) and auth_token_in_request_header(request_options):
         sts = boto3.client("sts")
         creds = sts.assume_role_with_web_identity(
             RoleArn=AWS_PRIVATE_ROLE_ARN,
             RoleSessionName="titiler-core",
             DurationSeconds=900,
-            WebIdentityToken=auth_token,
+            WebIdentityToken=request_options.get("Authorization", "").removeprefix("Bearer "),
         )["Credentials"]
         return s3fs.S3FileSystem(
             key=creds["AccessKeyId"],
@@ -88,7 +88,6 @@ def xarray_open_dataset(
 
     parsed = urlparse(src_path)
     protocol = parsed.scheme or "file"
-    auth_token = request_options.get("Authorization", "").removeprefix("Bearer ")
 
     xr_open_args: Dict[str, Any] = {
         "decode_coords": "all",
@@ -118,7 +117,7 @@ def xarray_open_dataset(
         else:
             if src_path.startswith("http"):
                 src_path = rewrite_https_to_s3_force(src_path)
-            fs = get_s3_filesystem(src_path, auth_token)
+            fs = get_s3_filesystem(src_path, request_options)
 
         mapper = fs.get_mapper(src_path)
         ds = xarray.open_dataset(mapper, consolidated=False, **xr_open_args)

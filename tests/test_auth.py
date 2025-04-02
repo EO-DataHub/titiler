@@ -72,17 +72,7 @@ def test_decode_jwt_token():
     decoded = auth.decode_jwt_token(f"Bearer {token}")
     assert decoded["workspaces"] == ["test"]
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(auth.HTTPException) as excinfo:
         auth.decode_jwt_token("wrongformat")
-
-
-def test_parse_and_authorize():
-    token = jwt.encode({"workspaces": ["workspace"]}, "secret", algorithm="HS256")
-    path = "workspace/path/file.txt"
-    assert (
-        auth.parse_and_authorize(path, f"Bearer {token}")
-        == "/mnt/efs/workspace/path/file.txt"
-    )
-
-    with pytest.raises(PermissionError):
-        auth.parse_and_authorize(path, "Bearer invalidtoken")
+    assert excinfo.value.status_code == 403
+    assert excinfo.value.detail == "Missing authorization token"
