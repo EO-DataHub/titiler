@@ -70,12 +70,7 @@ def xarray_open_dataset(
 
     parsed = urlparse(src_path)
     protocol = parsed.scheme or "file"
-    auth_token = (
-        request_options.get("Authorization", "")
-        if request_options and "Authorization" in request_options
-        else ""
-    )
-    auth_token = auth_token.removeprefix("Bearer ")
+    auth_token = request_options.get("Authorization", "").removeprefix("Bearer ")
 
     xr_open_args: Dict[str, Any] = {
         "decode_coords": "all",
