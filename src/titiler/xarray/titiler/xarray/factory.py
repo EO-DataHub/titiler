@@ -19,12 +19,15 @@ from titiler.core.dependencies import (
     HistogramParams,
     StatisticsParams,
 )
+from titiler.core.auth import resolve_src_path_and_credentials
 from titiler.core.factory import TilerFactory as BaseTilerFactory
 from titiler.core.models.responses import InfoGeoJSON, StatisticsGeoJSON
 from titiler.core.resources.responses import GeoJSONResponse, JSONResponse
 from titiler.core.utils import bounds_to_geometry
 from titiler.xarray.dependencies import DatasetParams, PartFeatureParams, XarrayParams
 from titiler.xarray.io import Reader
+
+from starlette.requests import Request
 
 
 @define(kw_only=True)
@@ -71,6 +74,7 @@ class TilerFactory(BaseTilerFactory):
             responses={200: {"description": "Return dataset's basic info."}},
         )
         def info_endpoint(
+            request: Request,
             src_path=Depends(self.path_dependency),
             reader_params=Depends(self.reader_dependency),
             show_times: Annotated[
@@ -80,8 +84,15 @@ class TilerFactory(BaseTilerFactory):
             env=Depends(self.environment_dependency),
         ) -> Info:
             """Return dataset's basic info."""
-            with rasterio.Env(**env):
-                with self.reader(src_path, **reader_params.as_dict()) as src_dst:
+            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            extra_kwargs = {}
+
+            extra_kwargs['request_options'] = request.headers
+
+            with rasterio.Env(**updated_env):
+                with self.reader(
+                    resolved_path, **extra_kwargs, **reader_params.as_dict()
+                ) as src_dst:
                     info = src_dst.info().model_dump()
                     if show_times and "time" in src_dst.input.dims:
                         times = [str(x.data) for x in src_dst.input.time]
