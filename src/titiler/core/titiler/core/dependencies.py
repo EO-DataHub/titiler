@@ -58,7 +58,15 @@ def create_colormap_dependency(cmap: ColorMaps) -> Callable:
 ColorMapParams = create_colormap_dependency(default_cmap)
 
 
-def DatasetPathParams(url: Annotated[str, Query(description="Dataset URL")]) -> str:
+def DatasetPathParams(
+    url: Annotated[
+        str,
+        Query(
+            description="Dataset URL",
+            example="https://dap.ceda.ac.uk/neodc/sentinel_ard/data/sentinel_2/2023/11/21/S2B_20231121_latn536lonw0052_T30UUE_ORB123_20231121122846_utm30n_TM65_vmsk_sharp_rad_srefdem_stdsref.tif",
+        ),
+    ],
+) -> str:
     """Create dataset path from args"""
     return url
 
@@ -468,9 +476,9 @@ class ImageRenderingParams(DefaultDependency):
                         r.replace(" ", "").replace("[", "").replace("]", "").split(","),
                     )
                 )
-                assert (
-                    len(parsed) == 2
-                ), f"Invalid rescale values: {self.rescale}, should be of form ['min,max', 'min,max'] or [[min,max], [min, max]]"
+                assert len(parsed) == 2, (
+                    f"Invalid rescale values: {self.rescale}, should be of form ['min,max', 'min,max'] or [[min,max], [min, max]]"
+                )
                 rescale_array.append(parsed)
 
             self.rescale: RescaleType = rescale_array
@@ -501,9 +509,9 @@ def RescalingParams(
                     r.replace(" ", "").replace("[", "").replace("]", "").split(","),
                 )
             )
-            assert (
-                len(parsed) == 2
-            ), f"Invalid rescale values: {rescale}, should be of form ['min,max', 'min,max'] or [[min,max], [min, max]]"
+            assert len(parsed) == 2, (
+                f"Invalid rescale values: {rescale}, should be of form ['min,max', 'min,max'] or [[min,max], [min, max]]"
+            )
 
             rescale_array.append(parsed)
 
@@ -608,9 +616,9 @@ link: https://numpy.org/doc/stable/reference/generated/numpy.histogram.html
 
         if self.range:
             parsed = list(map(float, self.range.split(",")))
-            assert (
-                len(parsed) == 2
-            ), f"Invalid histogram_range values: {self.range}, should be of form 'min,max'"
+            assert len(parsed) == 2, (
+                f"Invalid histogram_range values: {self.range}, should be of form 'min,max'"
+            )
 
             self.range = parsed  # type: ignore
 
@@ -620,9 +628,10 @@ def CoordCRSParams(
         Optional[str],
         Query(
             alias="coord_crs",
+            example="EPSG:4326",
             description="Coordinate Reference System of the input coords. Default to `epsg:4326`.",
         ),
-    ] = None,
+    ] = "EPSG:4326",
 ) -> Optional[CRS]:
     """Coordinate Reference System Coordinates Param."""
     if crs:
@@ -652,6 +661,7 @@ def CRSParams(
         Optional[str],
         Query(
             description="Coordinate Reference System.",
+            example="EPSG:4326",
         ),
     ] = None,
 ) -> Optional[CRS]:
