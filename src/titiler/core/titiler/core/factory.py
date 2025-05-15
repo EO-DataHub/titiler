@@ -960,7 +960,10 @@ class TilerFactory(BaseFactory):
             scale: Annotated[
                 int,
                 Field(
-                    gt=0, le=4, description="Tile size scale. 1=256x256, 2=512x512..."
+                    gt=0,
+                    le=4,
+                    description="Tile size scale. 1=256x256, 2=512x512...",
+                    example="2"
                 ),
             ] = 1,
             format: Annotated[
@@ -1367,8 +1370,8 @@ class TilerFactory(BaseFactory):
         )
         def point(
             request: Request,
-            lon: Annotated[float, Path(description="Longitude")],
-            lat: Annotated[float, Path(description="Latitude")],
+            lon: Annotated[float, Path(description="Longitude", example="-0.1")],
+            lat: Annotated[float, Path(description="Latitude", example="51.5")],
             src_path=Depends(self.path_dependency),
             reader_params=Depends(self.reader_dependency),
             coord_crs=Depends(CoordCRSParams),
@@ -1478,10 +1481,18 @@ class TilerFactory(BaseFactory):
         )
         def bbox_image(
             request: Request,
-            minx: Annotated[float, Path(description="Bounding box min X")],
-            miny: Annotated[float, Path(description="Bounding box min Y")],
-            maxx: Annotated[float, Path(description="Bounding box max X")],
-            maxy: Annotated[float, Path(description="Bounding box max Y")],
+            minx: Annotated[
+                float, Path(description="Bounding box min X", example="-0.15")
+            ],
+            miny: Annotated[
+                float, Path(description="Bounding box min Y", example="51.5")
+            ],
+            maxx: Annotated[
+                float, Path(description="Bounding box max X", example="-0.1")
+            ],
+            maxy: Annotated[
+                float, Path(description="Bounding box max Y", example="51.5")
+            ],
             format: Annotated[
                 ImageType,
                 "Default will be automatically defined if the output image needs a mask (png) or not (jpeg).",
@@ -2419,12 +2430,14 @@ class ColorMapFactory(BaseFactory):
                 Optional[int],
                 Query(
                     description="Image Height (default to 20px for horizontal or 256px for vertical).",
+                    example="256px",
                 ),
             ] = None,
             width: Annotated[
                 Optional[int],
                 Query(
                     description="Image Width (default to 256px for horizontal or 20px for vertical).",
+                    example="256px",
                 ),
             ] = None,
         ):

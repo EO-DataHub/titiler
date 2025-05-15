@@ -37,7 +37,7 @@ class XarrayIOParams(DefaultDependency):
 class XarrayDsParams(DefaultDependency):
     """Xarray Dataset Options."""
 
-    variable: Annotated[str, Query(description="Xarray Variable name")]
+    variable: Annotated[str, Query(description="Xarray Variable name", example="band1")]
 
     drop_dim: Annotated[
         Optional[str],
@@ -65,7 +65,7 @@ class CompatXarrayParams(XarrayIOParams):
     it would fail without the variable query-parameter set.
     """
 
-    variable: Annotated[Optional[str], Query(description="Xarray Variable name")] = None
+    variable: Annotated[Optional[str], Query(description="Xarray Variable name", example="band1")] = None
 
     drop_dim: Annotated[
         Optional[str],
