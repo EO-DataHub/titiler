@@ -35,6 +35,8 @@ dependencies = [
     "xarray",
     "rioxarray",
     "PyJWT",
+    "zarr==2.18.4",
+    "numcodecs<0.16"
 ]
 
 [project.optional-dependencies]

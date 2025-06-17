@@ -55,7 +55,7 @@ class TilerFactory(BaseTilerFactory):
 
     img_part_dependency: Type[DefaultDependency] = PartFeatureParams
 
-    add_viewer: bool = True
+    add_viewer: bool = False
     add_part: bool = True
 
     # remove some attribute from init

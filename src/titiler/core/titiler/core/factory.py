@@ -1,6 +1,7 @@
 """TiTiler Router factories."""
 
 import abc
+import os
 from typing import (
     Any,
     Callable,
@@ -1316,6 +1317,12 @@ class TilerFactory(BaseFactory):
                     # match the bounding box coordinate order to the CRS
                     bounds = [bounds[1], bounds[0], bounds[3], bounds[2]]
 
+            if os.getenv("TITILER_API_ROOT_PATH"):
+                api_root_path = os.getenv("TITILER_API_ROOT_PATH").rstrip("/")
+                url_path = request.url.replace(path=f"{api_root_path}{request.url.path}")
+            else:
+                url_path = request.url
+
             return self.templates.TemplateResponse(
                 request,
                 name="wmts.xml",
@@ -1327,6 +1334,7 @@ class TilerFactory(BaseFactory):
                     "bbox_crs_uri": bbox_crs_uri,
                     "layers": layers,
                     "media_type": tile_format.mediatype,
+                    "url_path": url_path,
                 },
                 media_type="application/xml",
             )
