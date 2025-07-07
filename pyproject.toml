@@ -122,6 +122,7 @@ namespace_packages = true
 explicit_package_bases = true
 
 [tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
 filterwarnings = [
     "ignore::rasterio.errors.NotGeoreferencedWarning",
 ]

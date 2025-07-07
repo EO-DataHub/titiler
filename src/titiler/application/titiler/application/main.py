@@ -7,7 +7,7 @@ import jinja2
 import rasterio
 from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security.api_key import APIKeyQuery
-from morecantile import tms, TileMatrixSet
+from morecantile import TileMatrixSet, tms
 from pyproj import CRS
 from rio_tiler.io import Reader, STACReader
 from starlette.middleware.cors import CORSMiddleware
@@ -43,7 +43,6 @@ from titiler.mosaic.errors import MOSAIC_STATUS_CODES
 from titiler.mosaic.factory import MosaicTilerFactory
 from titiler.xarray.extensions import VariablesExtension
 from titiler.xarray.factory import TilerFactory as XarrayTilerFactory
-
 
 logging.getLogger("botocore.credentials").disabled = True
 logging.getLogger("botocore.utils").disabled = True
@@ -114,7 +113,7 @@ if not api_settings.disable_cog:
         (0.0, 0.0, 700000.0, 1300000.0),
         CRS.from_epsg(27700),
         id="BritishNationalGrid",
-        matrix_scale=[1, 1]
+        matrix_scale=[1, 1],
     )
     tms = tms.register({EPSG6933.id: EPSG6933, EPSG27700.id: EPSG27700})
 

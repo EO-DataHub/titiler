@@ -41,7 +41,6 @@ from starlette.responses import HTMLResponse, Response
 from starlette.routing import Match, NoMatchFound, compile_path, replace_params
 from starlette.templating import Jinja2Templates
 from typing_extensions import Annotated
-import logging
 
 from titiler.core.algorithm import AlgorithmMetadata, Algorithms, BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
@@ -86,7 +85,6 @@ from titiler.core.resources.enums import ImageType
 from titiler.core.resources.responses import GeoJSONResponse, JSONResponse, XMLResponse
 from titiler.core.routing import EndpointScope
 from titiler.core.utils import bounds_to_geometry, render_image
-
 from titiler.xarray.io import Reader as XarrayReader
 
 jinja2_env = jinja2.Environment(
@@ -348,11 +346,13 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return the bounds of the COG."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -384,11 +384,13 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return dataset's basic info."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -416,11 +418,13 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return dataset's basic info as a GeoJSON feature."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -467,11 +471,13 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Get Dataset statistics."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -527,11 +533,13 @@ class TilerFactory(BaseFactory):
             if isinstance(fc, Feature):
                 fc = FeatureCollection(type="FeatureCollection", features=[geojson])
 
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -597,11 +605,13 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Retrieve a list of available raster tilesets for the specified dataset."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -696,13 +706,15 @@ class TilerFactory(BaseFactory):
         ):
             """Retrieve the raster tileset metadata for the specified dataset and tiling scheme (tile matrix set)."""
             tms = self.supported_tms.get(tileMatrixSetId)
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {
-                'tms' : tms,
+                "tms": tms,
             }
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -876,11 +888,13 @@ class TilerFactory(BaseFactory):
         ):
             """Create map tile from a dataset."""
             tms = self.supported_tms.get(tileMatrixSetId)
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
-            extra_kwargs = {'tms': tms}
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
+            extra_kwargs = {"tms": tms}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -910,12 +924,8 @@ class TilerFactory(BaseFactory):
             return Response(content, media_type=media_type)
 
         @self.router.get(r"/tiles/{z}/{x}/{y}", **img_endpoint_params)
-        @self.router.get(
-            r"/tiles/{z}/{x}/{y}.{format}", **img_endpoint_params
-        )
-        @self.router.get(
-            r"/tiles/{z}/{x}/{y}@{scale}x", **img_endpoint_params
-        )
+        @self.router.get(r"/tiles/{z}/{x}/{y}.{format}", **img_endpoint_params)
+        @self.router.get(r"/tiles/{z}/{x}/{y}@{scale}x", **img_endpoint_params)
         @self.router.get(
             r"/tiles/{z}/{x}/{y}@{scale}x.{format}",
             **img_endpoint_params,
@@ -1055,11 +1065,13 @@ class TilerFactory(BaseFactory):
                 tiles_url += f"?{urlencode(qs)}"
 
             tms = self.supported_tms.get(tileMatrixSetId)
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
-            extra_kwargs = {'tms': tms}
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
+            extra_kwargs = {"tms": tms}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1263,11 +1275,13 @@ class TilerFactory(BaseFactory):
             ]
 
             tms = self.supported_tms.get(tileMatrixSetId)
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
-            extra_kwargs = {'tms': tms}
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
+            extra_kwargs = {"tms": tms}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1317,9 +1331,12 @@ class TilerFactory(BaseFactory):
                     # match the bounding box coordinate order to the CRS
                     bounds = [bounds[1], bounds[0], bounds[3], bounds[2]]
 
-            if os.getenv("TITILER_API_ROOT_PATH"):
-                api_root_path = os.getenv("TITILER_API_ROOT_PATH").rstrip("/")
-                url_path = request.url.replace(path=f"{api_root_path}{request.url.path}")
+            titiler_api_root_path = os.getenv("TITILER_API_ROOT_PATH")
+            if titiler_api_root_path is not None:
+                api_root_path = titiler_api_root_path.rstrip("/")
+                url_path = request.url.replace(
+                    path=f"{api_root_path}{request.url.path}"
+                )
             else:
                 url_path = request.url
 
@@ -1364,11 +1381,13 @@ class TilerFactory(BaseFactory):
         ):
             """Get Point value for a dataset."""
 
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1413,12 +1432,13 @@ class TilerFactory(BaseFactory):
             render_params=Depends(self.render_dependency),
             env=Depends(self.environment_dependency),
         ):
-            
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1482,11 +1502,13 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Create image from a bbox."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1547,11 +1569,13 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Create image from a geojson feature."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1626,11 +1650,13 @@ class MultiBaseTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return dataset's basic info or the list of available assets."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1684,10 +1710,12 @@ class MultiBaseTilerFactory(TilerFactory):
             """Return a list of supported assets."""
             extra_kwargs = {}
 
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1724,11 +1752,13 @@ class MultiBaseTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Per Asset statistics"""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1769,11 +1799,13 @@ class MultiBaseTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Merged assets statistics."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1833,11 +1865,13 @@ class MultiBaseTilerFactory(TilerFactory):
             if isinstance(fc, Feature):
                 fc = FeatureCollection(type="FeatureCollection", features=[geojson])
 
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1917,11 +1951,13 @@ class MultiBandTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return dataset's basic info."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1950,11 +1986,13 @@ class MultiBandTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return dataset's basic info as a GeoJSON feature."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1982,11 +2020,13 @@ class MultiBandTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return a list of supported bands."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -2023,11 +2063,13 @@ class MultiBandTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Get Dataset statistics."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -2087,11 +2129,13 @@ class MultiBandTilerFactory(TilerFactory):
             if isinstance(fc, Feature):
                 fc = FeatureCollection(type="FeatureCollection", features=[geojson])
 
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
             if self.reader == XarrayReader:
-                extra_kwargs['request_options'] = request.headers
+                extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(
