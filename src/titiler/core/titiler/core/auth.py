@@ -1,3 +1,5 @@
+"""authentication and authorization utilities for TiTiler."""
+
 import logging
 import os
 import re

@@ -82,14 +82,12 @@ def xarray_open_dataset(
     """
     import fsspec  # noqa
 
-    try:
-        import h5netcdf
-    except ImportError:  # pragma: nocover
+    import importlib.util
+
+    if importlib.util.find_spec("h5netcdf") is None:  # pragma: nocover
         logging.warning("h5netcdf not installed")
 
-    try:
-        import zarr
-    except ImportError:  # pragma: nocover
+    if importlib.util.find_spec("zarr") is None:  # pragma: nocover
         logging.warning("zarr not installed")
 
     parsed = urlparse(src_path)

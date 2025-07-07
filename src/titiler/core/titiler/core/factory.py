@@ -1,7 +1,6 @@
 """TiTiler Router factories."""
 
 import abc
-import logging
 import os
 from typing import (
     Any,
