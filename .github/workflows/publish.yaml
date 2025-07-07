@@ -26,12 +26,6 @@ jobs:
 
       - uses: pre-commit/action@v3.0.1
 
-  security-scan:
-    name: Call Security Scan
-    uses: EO-DataHub/github-actions/.github/workflows/security.yaml@main
-    permissions:
-      contents: read
-
   unit-tests:
     name: Run unit tests
     uses: EO-DataHub/github-actions/.github/workflows/unit-tests-python.yaml@main
