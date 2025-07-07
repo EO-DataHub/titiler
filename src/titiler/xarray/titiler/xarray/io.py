@@ -41,8 +41,10 @@ def get_s3_filesystem(
             RoleArn=AWS_PRIVATE_ROLE_ARN,
             RoleSessionName="titiler-core",
             DurationSeconds=900,
-            WebIdentityToken=request_options.get("Authorization", "").removeprefix(
-                "Bearer "
+            WebIdentityToken=(
+                request_options.get("Authorization", "").removeprefix("Bearer ")
+                if request_options
+                else ""
             ),
         )["Credentials"]
         return s3fs.S3FileSystem(
@@ -80,9 +82,9 @@ def xarray_open_dataset(
     Returns:
         xarray.Dataset: The opened dataset.
     """
-    import fsspec  # noqa
-
     import importlib.util
+
+    import fsspec  # noqa
 
     if importlib.util.find_spec("h5netcdf") is None:  # pragma: nocover
         logging.warning("h5netcdf not installed")

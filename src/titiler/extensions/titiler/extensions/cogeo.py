@@ -22,9 +22,9 @@ class cogValidateExtension(FactoryExtension):
     def register(self, factory: TilerFactory):
         """Register endpoint to the tiler factory."""
 
-        assert cog_info is not None, (
-            "'rio-cogeo' must be installed to use CogValidateExtension"
-        )
+        assert (
+            cog_info is not None
+        ), "'rio-cogeo' must be installed to use CogValidateExtension"
 
         @factory.router.get(
             "/validate",

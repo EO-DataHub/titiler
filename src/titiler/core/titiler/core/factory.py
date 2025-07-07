@@ -1331,8 +1331,9 @@ class TilerFactory(BaseFactory):
                     # match the bounding box coordinate order to the CRS
                     bounds = [bounds[1], bounds[0], bounds[3], bounds[2]]
 
-            if os.getenv("TITILER_API_ROOT_PATH"):
-                api_root_path = os.getenv("TITILER_API_ROOT_PATH").rstrip("/")
+            titiler_api_root_path = os.getenv("TITILER_API_ROOT_PATH")
+            if titiler_api_root_path is not None:
+                api_root_path = titiler_api_root_path.rstrip("/")
                 url_path = request.url.replace(
                     path=f"{api_root_path}{request.url.path}"
                 )

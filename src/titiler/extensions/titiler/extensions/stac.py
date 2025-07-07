@@ -40,9 +40,9 @@ class stacExtension(FactoryExtension):
     def register(self, factory: TilerFactory):
         """Register endpoint to the tiler factory."""
 
-        assert create_stac_item is not None, (
-            "'rio-stac' must be installed to use stacExtension"
-        )
+        assert (
+            create_stac_item is not None
+        ), "'rio-stac' must be installed to use stacExtension"
         assert pystac is not None, "'pystac' must be installed to use stacExtension"
 
         media = [m.value for m in pystac.MediaType] + ["auto"]
