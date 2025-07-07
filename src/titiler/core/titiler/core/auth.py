@@ -1,16 +1,14 @@
-import os
-import jwt
 import logging
+import os
 import re
-from typing import Tuple, Optional
 import urllib.parse
+from typing import Optional, Tuple
 from urllib.parse import urlparse
 
 import boto3
-from fastapi import Request
+import jwt
+from fastapi import HTTPException, Request
 from rasterio.session import AWSSession
-
-from fastapi import HTTPException
 
 CREDENTIALS_ENDPOINT = os.getenv("CREDENTIALS_ENDPOINT", "")
 AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
@@ -19,20 +17,17 @@ DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 EODH_WORKSPACE_URL_PATTERN = re.compile(
     os.getenv(
         "EODH_WORKSPACE_URL_PATTERN",
-        r"^https://(?P<subdomain>[\w-]+)\.(?P<env>[\w-]+)\.eodatahub-workspaces\.org\.uk/files/(?P<bucket>workspaces-eodhp-[\w-]+)/(?P<key>.+)$"
+        r"^https://(?P<subdomain>[\w-]+)\.(?P<env>[\w-]+)\.eodatahub-workspaces\.org\.uk/files/(?P<bucket>workspaces-eodhp-[\w-]+)/(?P<key>.+)$",
     )
 )
 EODH_S3_HTTPS_PATTERN = re.compile(
     os.getenv(
         "EODH_S3_HTTPS_PATTERN",
-        r"^https://(?P<bucket>workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(?P<workspace>[\w-]+)/(?P<key>.+)$"
+        r"^https://(?P<bucket>workspaces-eodhp-[\w-]+)\.s3\.eu-west-2\.amazonaws\.com/(?P<workspace>[\w-]+)/(?P<key>.+)$",
     )
 )
 EODH_S3_BUCKET_PATTERN = re.compile(
-    os.getenv(
-        "EODH_S3_BUCKET_PATTERN",
-        r"^s3://workspaces-eodhp-[\w-]+/"
-    )
+    os.getenv("EODH_S3_BUCKET_PATTERN", r"^s3://workspaces-eodhp-[\w-]+/")
 )
 
 WHITELIST_PATTERNS = [
@@ -161,7 +156,9 @@ def resolve_src_path_and_credentials(
         updated_env["session"] = aws_session
 
     # 2) Whitelisted, in public workspace segment and no auth headers supplied (use service account credentials)
-    elif is_file_in_public_workspace(src_path) and not auth_token_in_request_header(request.headers):
+    elif is_file_in_public_workspace(src_path) and not auth_token_in_request_header(
+        request.headers
+    ):
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
         boto_session = boto3.Session()
         aws_session = AWSSession(boto_session, requester_pays=False)

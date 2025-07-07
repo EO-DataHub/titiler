@@ -1,5 +1,6 @@
 """titiler.xarray.io"""
 
+import logging
 import os
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import urlparse
@@ -7,19 +8,25 @@ from urllib.parse import urlparse
 import attr
 import boto3
 import numpy
-import logging
 import s3fs
 import xarray
 from morecantile import TileMatrixSet
 from rio_tiler.constants import WEB_MERCATOR_TMS
 from rio_tiler.io.xarray import XarrayReader
 
-from titiler.core.auth import is_file_in_public_workspace, is_whitelisted_url, rewrite_https_to_s3_force, auth_token_in_request_header
+from titiler.core.auth import (
+    auth_token_in_request_header,
+    is_file_in_public_workspace,
+    is_whitelisted_url,
+    rewrite_https_to_s3_force,
+)
 
 AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 
 
-def get_s3_filesystem(src_path: str, request_options: Optional[Dict] = None) -> s3fs.S3FileSystem:
+def get_s3_filesystem(
+    src_path: str, request_options: Optional[Dict] = None
+) -> s3fs.S3FileSystem:
     """
     Returns an S3FileSystem tailored to the URL type and authorisation token, if given.
     This is primarily used for Zarr datasets, which need a file-system-level view of data.
@@ -34,7 +41,9 @@ def get_s3_filesystem(src_path: str, request_options: Optional[Dict] = None) -> 
             RoleArn=AWS_PRIVATE_ROLE_ARN,
             RoleSessionName="titiler-core",
             DurationSeconds=900,
-            WebIdentityToken=request_options.get("Authorization", "").removeprefix("Bearer "),
+            WebIdentityToken=request_options.get("Authorization", "").removeprefix(
+                "Bearer "
+            ),
         )["Credentials"]
         return s3fs.S3FileSystem(
             key=creds["AccessKeyId"],
@@ -46,10 +55,7 @@ def get_s3_filesystem(src_path: str, request_options: Optional[Dict] = None) -> 
         session = boto3.Session()
         creds = session.get_credentials().get_frozen_credentials()
         return s3fs.S3FileSystem(
-            key=creds.access_key,
-            secret=creds.secret_key,
-            token=creds.token,
-            anon=False
+            key=creds.access_key, secret=creds.secret_key, token=creds.token, anon=False
         )
 
     return s3fs.S3FileSystem(anon=True)
@@ -64,7 +70,7 @@ def xarray_open_dataset(
     """
     Opens an Xarray dataset from various sources, including NetCDF, Zarr, and Kerchunk references.
     Automatically picks the right engine and sets up credentials if needed.
-    
+
     Args:
         src_path (str): The path or URL to open (local, S3, HTTPS, or JSON reference).
         group (str, optional): The sub-dataset or group within the file.

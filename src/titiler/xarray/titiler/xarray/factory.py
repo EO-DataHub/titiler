@@ -8,8 +8,10 @@ from fastapi import Body, Depends, Query
 from geojson_pydantic.features import Feature, FeatureCollection
 from rio_tiler.constants import WGS84_CRS
 from rio_tiler.models import Info
+from starlette.requests import Request
 from typing_extensions import Annotated
 
+from titiler.core.auth import resolve_src_path_and_credentials
 from titiler.core.dependencies import (
     CoordCRSParams,
     CRSParams,
@@ -19,15 +21,12 @@ from titiler.core.dependencies import (
     HistogramParams,
     StatisticsParams,
 )
-from titiler.core.auth import resolve_src_path_and_credentials
 from titiler.core.factory import TilerFactory as BaseTilerFactory
 from titiler.core.models.responses import InfoGeoJSON, StatisticsGeoJSON
 from titiler.core.resources.responses import GeoJSONResponse, JSONResponse
 from titiler.core.utils import bounds_to_geometry
 from titiler.xarray.dependencies import DatasetParams, PartFeatureParams, XarrayParams
 from titiler.xarray.io import Reader
-
-from starlette.requests import Request
 
 
 @define(kw_only=True)
@@ -84,10 +83,12 @@ class TilerFactory(BaseTilerFactory):
             env=Depends(self.environment_dependency),
         ) -> Info:
             """Return dataset's basic info."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(src_path, request, env)
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
             extra_kwargs = {}
 
-            extra_kwargs['request_options'] = request.headers
+            extra_kwargs["request_options"] = request.headers
 
             with rasterio.Env(**updated_env):
                 with self.reader(

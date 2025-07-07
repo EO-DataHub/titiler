@@ -1,5 +1,5 @@
-import pytest
 import jwt
+import pytest
 
 from titiler.core import auth
 
@@ -19,12 +19,8 @@ def test_is_whitelisted_url():
 
 
 def test_is_file_in_public_workspace():
-    public_url = (
-        "https://workspaces-eodhp-dev.s3.eu-west-2.amazonaws.com/my-workspace/public/myfile.tif"
-    )
-    private_url = (
-        "https://workspaces-eodhp-dev.s3.eu-west-2.amazonaws.com/my-workspace/private/myfile.tif"
-    )
+    public_url = "https://workspaces-eodhp-dev.s3.eu-west-2.amazonaws.com/my-workspace/public/myfile.tif"
+    private_url = "https://workspaces-eodhp-dev.s3.eu-west-2.amazonaws.com/my-workspace/private/myfile.tif"
     assert auth.is_file_in_public_workspace(public_url)
     assert not auth.is_file_in_public_workspace(private_url)
 
