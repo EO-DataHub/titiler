@@ -122,6 +122,7 @@ pystac==1.13.0
     # via
     #   rio-stac
     #   rio-tiler
+pytest==8.4.1
 python-dateutil==2.9.0.post0
     # via
     #   pandas
