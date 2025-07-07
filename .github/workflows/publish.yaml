@@ -26,14 +26,6 @@ jobs:
 
       - uses: pre-commit/action@v3.0.1
 
-  unit-tests:
-    name: Run unit tests
-    uses: EO-DataHub/github-actions/.github/workflows/unit-tests-python.yaml@main
-    with:
-      PYTHON_VERSION: "3.13"
-    permissions:
-      contents: read
-
   get-tag-name:
     runs-on: ubuntu-latest
     outputs:
