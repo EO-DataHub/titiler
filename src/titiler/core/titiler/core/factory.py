@@ -86,6 +86,7 @@ from titiler.core.resources.responses import GeoJSONResponse, JSONResponse, XMLR
 from titiler.core.routing import EndpointScope
 from titiler.core.utils import bounds_to_geometry, render_image
 from titiler.xarray.io import Reader as XarrayReader
+from rio_tiler.io import STACReader
 
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
@@ -895,6 +896,9 @@ class TilerFactory(BaseFactory):
 
             if self.reader == XarrayReader:
                 extra_kwargs["request_options"] = request.headers
+
+            if self.reader == STACReader:
+                extra_kwargs["fetch_options"] = {"headers": {"Authorization": request.headers.get("Authorization")}}
 
             with rasterio.Env(**updated_env):
                 with self.reader(
