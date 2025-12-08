@@ -32,7 +32,13 @@ from pydantic import Field
 from rio_tiler.colormap import ColorMaps
 from rio_tiler.colormap import cmap as default_cmap
 from rio_tiler.constants import WGS84_CRS
-from rio_tiler.io import BaseReader, MultiBandReader, MultiBaseReader, Reader
+from rio_tiler.io import (
+    BaseReader,
+    MultiBandReader,
+    MultiBaseReader,
+    Reader,
+    STACReader,
+)
 from rio_tiler.models import Bounds, ImageData, Info
 from rio_tiler.types import ColorMapType
 from rio_tiler.utils import CRS_to_uri, CRS_to_urn
@@ -86,7 +92,6 @@ from titiler.core.resources.responses import GeoJSONResponse, JSONResponse, XMLR
 from titiler.core.routing import EndpointScope
 from titiler.core.utils import bounds_to_geometry, render_image
 from titiler.xarray.io import Reader as XarrayReader
-from rio_tiler.io import STACReader
 
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
@@ -898,7 +903,9 @@ class TilerFactory(BaseFactory):
                 extra_kwargs["request_options"] = request.headers
 
             if self.reader == STACReader:
-                extra_kwargs["fetch_options"] = {"headers": {"Authorization": request.headers.get("Authorization")}}
+                extra_kwargs["fetch_options"] = {
+                    "headers": {"Authorization": request.headers.get("Authorization")}
+                }
 
             with rasterio.Env(**updated_env):
                 with self.reader(
