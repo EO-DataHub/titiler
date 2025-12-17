@@ -134,7 +134,8 @@ class RewrittenSTACReader(STACReader):
     def _get_asset_info(self, asset: str):
         info = super()._get_asset_info(asset)
         url = info["url"]
-        info["url"] = rewrite_https_to_s3_if_needed(url)
+        resolved_path, _ = rewrite_https_to_s3_if_needed(url)
+        info["url"] = resolved_path
         return info
 
 
