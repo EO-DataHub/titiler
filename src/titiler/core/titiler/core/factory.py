@@ -1708,10 +1708,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs, self.reader = configure_reader(self.reader, request)
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     return src_dst.info(**asset_params.as_dict())
@@ -1740,10 +1740,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs, self.reader = configure_reader(self.reader, request)
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     bounds = src_dst.get_geographic_bounds(crs or WGS84_CRS)
@@ -1771,10 +1771,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs, self.reader = configure_reader(self.reader, request)
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     return src_dst.assets
@@ -1811,10 +1811,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs, self.reader = configure_reader(self.reader, request)
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     return src_dst.statistics(
@@ -1855,10 +1855,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs, self.reader = configure_reader(self.reader, request)
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     # Default to all available assets
@@ -1918,10 +1918,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs, self.reader = configure_reader(self.reader, request)
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     # Default to all available assets
