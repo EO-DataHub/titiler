@@ -933,6 +933,8 @@ class TilerFactory(BaseFactory):
                 }
 
             logging.getLogger("rasterio").setLevel(logging.DEBUG)
+            logging.info(f"XXX==--> src_path: {src_path}")
+            logging.info(f"XXX==--> resolved_path: {resolved_path}")
 
             with rasterio.Env(**updated_env):
                 with self.reader(

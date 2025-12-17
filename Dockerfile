@@ -27,4 +27,10 @@ ENV VARIABLE_NAME=app
 ENV HOST=0.0.0.0
 ENV PORT=80
 ENV WEB_CONCURRENCY=1
-CMD gunicorn -k uvicorn.workers.UvicornWorker ${MODULE_NAME}:${VARIABLE_NAME} --bind ${HOST}:${PORT} --workers ${WEB_CONCURRENCY}
+###
+ENV CPL_DEBUG=ON
+ENV GDAL_DEBUG=ON
+ENV RIO_LOG_LEVEL=DEBUG
+END RASTERIO_LOG_LEVEL=DEBUG
+###
+CMD gunicorn -k uvicorn.workers.UvicornWorker ${MODULE_NAME}:${VARIABLE_NAME} --bind ${HOST}:${PORT} --workers ${WEB_CONCURRENCY} --log-level debug
