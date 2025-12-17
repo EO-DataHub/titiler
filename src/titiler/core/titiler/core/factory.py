@@ -50,7 +50,10 @@ from typing_extensions import Annotated
 
 from titiler.core.algorithm import AlgorithmMetadata, Algorithms, BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
-from titiler.core.auth import resolve_src_path_and_credentials
+from titiler.core.auth import (
+    resolve_src_path_and_credentials,
+    rewrite_https_to_s3_if_needed,
+)
 from titiler.core.dependencies import (
     AssetsBidxExprParams,
     AssetsBidxExprParamsOptional,
@@ -99,11 +102,24 @@ jinja2_env = jinja2.Environment(
 DEFAULT_TEMPLATES = Jinja2Templates(env=jinja2_env)
 
 
-def add_reader_options(
+class RewriteSTACReader(STACReader):
+    """
+    Rewritten STACReader to rewrite the href to the S3 URL.
+    """
+
+    def _get_asset_info(self, asset: str):
+        info = super()._get_asset_info(asset)
+        url = info["url"]
+        resolved_path, _ = rewrite_https_to_s3_if_needed(url)
+        info["url"] = resolved_path
+        return info
+
+
+def configure_reader(
     reader: Type[BaseReader],
     request: Request,
     extra_kwargs: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+) -> Tuple[Dict[str, Any], Type[BaseReader]]:
     """Add reader-specific fetch/request options to extra_kwargs.
 
     For XarrayReader: adds request_options with headers.
@@ -115,7 +131,7 @@ def add_reader_options(
         extra_kwargs: Existing extra kwargs dictionary to update. Defaults to empty dict.
 
     Returns:
-        Updated extra_kwargs dictionary.
+        Tuple of (updated extra_kwargs dictionary, reader class).
     """
     if extra_kwargs is None:
         extra_kwargs = {}
@@ -124,11 +140,12 @@ def add_reader_options(
         extra_kwargs["request_options"] = request.headers
 
     if reader == STACReader:
+        reader = RewriteSTACReader
         extra_kwargs["fetch_options"] = {
             "headers": {"Authorization": request.headers.get("Authorization")}
         }
 
-    return extra_kwargs
+    return extra_kwargs, reader
 
 
 img_endpoint_params: Dict[str, Any] = {
@@ -930,7 +947,9 @@ class TilerFactory(BaseFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = add_reader_options(self.reader, request, {"tms": tms})
+            extra_kwargs, self.reader = configure_reader(
+                self.reader, request, {"tms": tms}
+            )
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1689,7 +1708,7 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = add_reader_options(self.reader, request)
+            extra_kwargs = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1721,7 +1740,7 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = add_reader_options(self.reader, request)
+            extra_kwargs = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1752,7 +1771,7 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = add_reader_options(self.reader, request)
+            extra_kwargs = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1792,7 +1811,7 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = add_reader_options(self.reader, request)
+            extra_kwargs = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1836,7 +1855,7 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = add_reader_options(self.reader, request)
+            extra_kwargs = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
                 with self.reader(
@@ -1899,7 +1918,7 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = add_reader_options(self.reader, request)
+            extra_kwargs = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
                 with self.reader(
