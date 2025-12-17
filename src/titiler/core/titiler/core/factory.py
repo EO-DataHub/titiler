@@ -947,12 +947,12 @@ class TilerFactory(BaseFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs, self.reader = configure_reader(
+            extra_kwargs, reader_cls = configure_reader(
                 self.reader, request, {"tms": tms}
             )
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     image = src_dst.tile(
