@@ -141,9 +141,9 @@ def configure_reader(
 
     if reader == STACReader:
         reader = RewriteSTACReader
-        extra_kwargs["fetch_options"] = {
-            "headers": {"Authorization": request.headers.get("Authorization")}
-        }
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            extra_kwargs["fetch_options"] = {"headers": {"Authorization": auth_header}}
 
     return extra_kwargs, reader
 
