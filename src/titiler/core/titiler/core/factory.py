@@ -1,6 +1,11 @@
 """TiTiler Router factories."""
 
 import abc
+
+### >>>
+import logging
+
+### <<<
 import os
 from typing import (
     Any,
@@ -50,7 +55,10 @@ from typing_extensions import Annotated
 
 from titiler.core.algorithm import AlgorithmMetadata, Algorithms, BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
-from titiler.core.auth import resolve_src_path_and_credentials
+from titiler.core.auth import (
+    resolve_src_path_and_credentials,
+    rewrite_https_to_s3_if_needed,
+)
 from titiler.core.dependencies import (
     AssetsBidxExprParams,
     AssetsBidxExprParamsOptional,
@@ -115,6 +123,22 @@ img_endpoint_params: Dict[str, Any] = {
     },
     "response_class": Response,
 }
+
+
+#### >>>
+class RewrittenSTACReader(STACReader):
+    """
+    Rewritten STACReader to rewrite the href to the S3 URL.
+    """
+
+    def _get_asset_info(self, asset: str):
+        info = super()._get_asset_info(asset)
+        href = info["href"]
+        info["href"] = rewrite_https_to_s3_if_needed(href)
+        return info
+
+
+#### <<<
 
 
 @define
@@ -903,9 +927,12 @@ class TilerFactory(BaseFactory):
                 extra_kwargs["request_options"] = request.headers
 
             if self.reader == STACReader:
+                self.reader = RewrittenSTACReader
                 extra_kwargs["fetch_options"] = {
                     "headers": {"Authorization": request.headers.get("Authorization")}
                 }
+
+            logging.getLogger("rasterio").setLevel(logging.DEBUG)
 
             with rasterio.Env(**updated_env):
                 with self.reader(
