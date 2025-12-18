@@ -32,7 +32,13 @@ from pydantic import Field
 from rio_tiler.colormap import ColorMaps
 from rio_tiler.colormap import cmap as default_cmap
 from rio_tiler.constants import WGS84_CRS
-from rio_tiler.io import BaseReader, MultiBandReader, MultiBaseReader, Reader
+from rio_tiler.io import (
+    BaseReader,
+    MultiBandReader,
+    MultiBaseReader,
+    Reader,
+    STACReader,
+)
 from rio_tiler.models import Bounds, ImageData, Info
 from rio_tiler.types import ColorMapType
 from rio_tiler.utils import CRS_to_uri, CRS_to_urn
@@ -44,7 +50,10 @@ from typing_extensions import Annotated
 
 from titiler.core.algorithm import AlgorithmMetadata, Algorithms, BaseAlgorithm
 from titiler.core.algorithm import algorithms as available_algorithms
-from titiler.core.auth import resolve_src_path_and_credentials
+from titiler.core.auth import (
+    resolve_src_path_and_credentials,
+    rewrite_https_to_s3_if_needed,
+)
 from titiler.core.dependencies import (
     AssetsBidxExprParams,
     AssetsBidxExprParamsOptional,
@@ -91,6 +100,53 @@ jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
 )
 DEFAULT_TEMPLATES = Jinja2Templates(env=jinja2_env)
+
+
+class RewriteSTACReader(STACReader):
+    """
+    Rewritten STACReader to rewrite the href to the S3 URL.
+    """
+
+    def _get_asset_info(self, asset: str):
+        info = super()._get_asset_info(asset)
+        url = info["url"]
+        resolved_path, _ = rewrite_https_to_s3_if_needed(url)
+        info["url"] = resolved_path
+        return info
+
+
+def configure_reader(
+    reader: Type[BaseReader],
+    request: Request,
+    extra_kwargs: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Any], Type[BaseReader]]:
+    """Add reader-specific fetch/request options to extra_kwargs.
+
+    For XarrayReader: adds request_options with headers.
+    For STACReader: adds fetch_options with Authorization header for fetching STAC item JSON.
+
+    Args:
+        reader: The reader class being used.
+        request: The incoming HTTP request.
+        extra_kwargs: Existing extra kwargs dictionary to update. Defaults to empty dict.
+
+    Returns:
+        Tuple of (updated extra_kwargs dictionary, reader class).
+    """
+    if extra_kwargs is None:
+        extra_kwargs = {}
+
+    if reader == XarrayReader:
+        extra_kwargs["request_options"] = request.headers
+
+    if reader == STACReader:
+        reader = RewriteSTACReader
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            extra_kwargs["fetch_options"] = {"headers": {"Authorization": auth_header}}
+
+    return extra_kwargs, reader
+
 
 img_endpoint_params: Dict[str, Any] = {
     "responses": {
@@ -891,13 +947,12 @@ class TilerFactory(BaseFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = {"tms": tms}
-
-            if self.reader == XarrayReader:
-                extra_kwargs["request_options"] = request.headers
+            extra_kwargs, reader_cls = configure_reader(
+                self.reader, request, {"tms": tms}
+            )
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     image = src_dst.tile(
@@ -1653,13 +1708,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = {}
-
-            if self.reader == XarrayReader:
-                extra_kwargs["request_options"] = request.headers
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     return src_dst.info(**asset_params.as_dict())
@@ -1677,6 +1729,7 @@ class MultiBaseTilerFactory(TilerFactory):
             },
         )
         def info_geojson(
+            request: Request,
             src_path=Depends(self.path_dependency),
             reader_params=Depends(self.reader_dependency),
             asset_params=Depends(self.assets_dependency),
@@ -1684,8 +1737,15 @@ class MultiBaseTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return dataset's basic info as a GeoJSON feature."""
-            with rasterio.Env(**env):
-                with self.reader(src_path, **reader_params.as_dict()) as src_dst:
+            resolved_path, updated_env = resolve_src_path_and_credentials(
+                src_path, request, env
+            )
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
+
+            with rasterio.Env(**updated_env):
+                with reader_cls(
+                    resolved_path, **extra_kwargs, **reader_params.as_dict()
+                ) as src_dst:
                     bounds = src_dst.get_geographic_bounds(crs or WGS84_CRS)
                     geometry = bounds_to_geometry(bounds)
 
@@ -1708,17 +1768,13 @@ class MultiBaseTilerFactory(TilerFactory):
             env=Depends(self.environment_dependency),
         ):
             """Return a list of supported assets."""
-            extra_kwargs = {}
-
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-
-            if self.reader == XarrayReader:
-                extra_kwargs["request_options"] = request.headers
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     return src_dst.assets
@@ -1755,13 +1811,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = {}
-
-            if self.reader == XarrayReader:
-                extra_kwargs["request_options"] = request.headers
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     return src_dst.statistics(
@@ -1802,13 +1855,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = {}
-
-            if self.reader == XarrayReader:
-                extra_kwargs["request_options"] = request.headers
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     # Default to all available assets
@@ -1868,13 +1918,10 @@ class MultiBaseTilerFactory(TilerFactory):
             resolved_path, updated_env = resolve_src_path_and_credentials(
                 src_path, request, env
             )
-            extra_kwargs = {}
-
-            if self.reader == XarrayReader:
-                extra_kwargs["request_options"] = request.headers
+            extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
             with rasterio.Env(**updated_env):
-                with self.reader(
+                with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
                     # Default to all available assets
