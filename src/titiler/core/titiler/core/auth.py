@@ -32,6 +32,13 @@ EODH_S3_BUCKET_PATTERN = re.compile(
     os.getenv("EODH_S3_BUCKET_PATTERN", r"^s3://workspaces-eodhp-[\w-]+/")
 )
 
+EODH_STAC_ITEM_URL_PATTERN = re.compile(
+    os.getenv(
+        "EODH_STAC_ITEM_URL_PATTERN",
+        r"^https?://(?:[a-z0-9-]+\.)?eodatahub\.org\.uk/api/catalogue/stac/(?:catalogs/[^/]+/)+collections/[^/]+/items/[^/]+$",
+    )
+)
+
 WHITELIST_PATTERNS = [
     EODH_WORKSPACE_URL_PATTERN,
     EODH_S3_HTTPS_PATTERN,
@@ -44,6 +51,13 @@ EFS_PATH_PATTERN = re.compile(r"^/mnt/efs/(?P<workspace>[^/]+)/(?P<path>.+)$")
 GENERAL_HTTPS_PATTERN = re.compile(
     r"^https://(?P<bucket>[\w-]+)\.s3\.[\w-]+\.amazonaws\.com/(?P<key>.+)$"
 )
+
+
+def is_stac_item_url(url: str) -> bool:
+    """
+    Checks if the given URL matches the EODH STAC item URL pattern.
+    """
+    return bool(EODH_STAC_ITEM_URL_PATTERN.match(url))
 
 
 def is_whitelisted_url(url: str) -> bool:
@@ -151,6 +165,21 @@ def resolve_src_path_and_credentials(
     if is_whitelisted_url(src_path) and auth_token_in_request_header(request.headers):
         logging.info("XXX===> is_whitelisted_url and auth_token_in_request_header")
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(
+                status_code=403,
+                detail="Missing authorization token",
+            )
+
+        token = auth_header.removeprefix("Bearer ")
+        boto_session = assume_aws_role_with_token(token)
+        aws_session = AWSSession(boto_session, requester_pays=False)
+        updated_env["session"] = aws_session
+
+    elif is_stac_item_url(src_path) and auth_token_in_request_header(request.headers):
+        logging.info("XXX===> is_stac_item_url and auth_token_in_request_header")
+        resolved_path = src_path
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             raise HTTPException(
