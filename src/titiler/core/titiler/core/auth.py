@@ -157,9 +157,7 @@ def resolve_src_path_and_credentials(
     parsed = urlparse(src_path)
 
     logging.info(f"XXX===> src_path: {src_path}")
-    logging.info(
-        f"XXX===> request.headers: {request.headers.get('Authorization', '')[:10]}"
-    )
+    logging.info(f"XXX===> request.headers: {request.headers.get('Authorization', '')}")
 
     # 1) Whitelisted and auth header present (use AWS role assumption)
     if is_whitelisted_url(src_path) and auth_token_in_request_header(request.headers):
@@ -222,7 +220,7 @@ def resolve_src_path_and_credentials(
             )
         resolved_path = os.path.normpath(f"/mnt/efs/{workspace}/{path}")
 
-    logging.info(f"XXX===> updated_env: {updated_env}")
+    logging.info(f"XXX===> updated_env['session']: {vars(updated_env['session'])}")
     logging.info(f"XXX===> resolved_path: {resolved_path}")
 
     return resolved_path, updated_env
