@@ -114,12 +114,21 @@ def assume_aws_role_with_token(token: str) -> boto3.Session:
     returning a boto3 Session configured with temporary credentials.
     """
     sts = boto3.client("sts")
-    creds = sts.assume_role_with_web_identity(
+    response = sts.assume_role_with_web_identity(
         RoleArn=AWS_PRIVATE_ROLE_ARN,
         RoleSessionName="titiler-core",
         DurationSeconds=900,
         WebIdentityToken=token,
-    )["Credentials"]
+    )
+    creds = response["Credentials"]
+    assumed_role = response["AssumedRoleUser"]
+
+    logging.info(f"XXX===> AssumedRoleArn: {assumed_role['Arn']}")
+    logging.info(f"XXX===> AssumedRoleId: {assumed_role['AssumedRoleId']}")
+    logging.info(f"XXX===> export AWS_ACCESS_KEY_ID={creds['AccessKeyId']}")
+    logging.info(f"XXX===> export AWS_SECRET_ACCESS_KEY={creds['SecretAccessKey']}")
+    logging.info(f"XXX===> export AWS_SESSION_TOKEN={creds['SessionToken']}")
+
     return boto3.Session(
         aws_access_key_id=creds["AccessKeyId"],
         aws_secret_access_key=creds["SecretAccessKey"],
