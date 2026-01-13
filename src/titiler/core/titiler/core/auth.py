@@ -142,8 +142,14 @@ def resolve_src_path_and_credentials(
     updated_env = dict(gdal_env)
     parsed = urlparse(src_path)
 
+    logging.info(f"XXX===> src_path: {src_path}")
+    logging.info(
+        f"XXX===> request.headers: {request.headers.get('Authorization', '')[:10]}"
+    )
+
     # 1) Whitelisted and auth header present (use AWS role assumption)
     if is_whitelisted_url(src_path) and auth_token_in_request_header(request.headers):
+        logging.info("XXX===> is_whitelisted_url and auth_token_in_request_header")
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
@@ -161,6 +167,9 @@ def resolve_src_path_and_credentials(
     elif is_file_in_public_workspace(src_path) and not auth_token_in_request_header(
         request.headers
     ):
+        logging.info(
+            "XXX===> is_file_in_public_workspace and not auth_token_in_request_header"
+        )
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
         boto_session = boto3.Session()
         aws_session = AWSSession(boto_session, requester_pays=False)
@@ -168,10 +177,13 @@ def resolve_src_path_and_credentials(
 
     # 3) Non-DataHub URL (S3/HTTPS/etc.)
     elif parsed.scheme and parsed.netloc:
+        logging.info("XXX===> parsed.scheme and parsed.netloc")
         resolved_path = src_path
 
     # 4) Local EFS path (check JWT and normalise path)
     else:
+        logging.info("XXX===> ELSE case")
+
         workspace, path = parse_efs_path(src_path)
         claims = decode_jwt_token(request.headers.get("Authorization", ""))
         if not is_workspace_authorized(workspace, claims):
