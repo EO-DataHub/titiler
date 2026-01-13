@@ -177,8 +177,6 @@ def resolve_src_path_and_credentials(
         aws_session = AWSSession(boto_session, requester_pays=False)
         updated_env["session"] = aws_session
 
-        logging.info(f"XXX===> updated_env: {updated_env}")
-
     elif is_stac_item_url(src_path) and auth_token_in_request_header(request.headers):
         logging.info("XXX===> is_stac_item_url and auth_token_in_request_header")
         resolved_path = src_path
@@ -223,6 +221,9 @@ def resolve_src_path_and_credentials(
                 detail="Unauthorized access to workspace",
             )
         resolved_path = os.path.normpath(f"/mnt/efs/{workspace}/{path}")
+
+    logging.info(f"XXX===> updated_env: {updated_env}")
+    logging.info(f"XXX===> resolved_path: {resolved_path}")
 
     return resolved_path, updated_env
 
