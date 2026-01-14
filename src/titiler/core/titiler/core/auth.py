@@ -197,7 +197,7 @@ def resolve_src_path_and_credentials(
 
         token = auth_header.removeprefix("Bearer ")
         boto_session = assume_aws_role_with_token(token)
-        aws_session = AWSSession(boto_session, requester_pays=False)
+        aws_session = AWSSession(session=boto_session, requester_pays=False)
         updated_env["session"] = aws_session
 
     # 2) Whitelisted, in public workspace segment and no auth headers supplied (use service account credentials)
