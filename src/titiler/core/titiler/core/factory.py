@@ -1003,6 +1003,35 @@ class TilerFactory(BaseFactory):
                     )
                     dst_colormap = getattr(src_dst, "colormap", None)
 
+                    ####
+                    import boto3
+
+                    session = boto3.Session()
+                    credentials = session.get_credentials()
+                    if credentials:
+                        logging.info(
+                            f"XXX===> rasterio: export AWS_ACCESS_KEY_ID={credentials.access_key}"
+                        )
+                        logging.info(
+                            f"XXX===> rasterio: export AWS_SECRET_ACCESS_KEY={credentials.secret_key}"
+                        )
+                        logging.info(
+                            f"XXX===> rasterio: export AWS_SESSION_TOKEN={credentials.token}"
+                        )
+                        # Log caller identity (like `aws sts get-caller-identity`)
+                        sts = session.client("sts")
+                        identity = sts.get_caller_identity()
+                        logging.info(
+                            f"XXX===> rasterio: AWS Account: {identity['Account']}"
+                        )
+                        logging.info(
+                            f"XXX===> rasterio: AWS UserId: {identity['UserId']}"
+                        )
+                        logging.info(f"XXX===> rasterio: AWS Arn: {identity['Arn']}")
+                    else:
+                        logging.info("XXX===> rasterio: No boto credentials found")
+                    ####
+
             if post_process:
                 image = post_process(image)
 
