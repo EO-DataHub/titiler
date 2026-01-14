@@ -108,13 +108,26 @@ class RewriteSTACReader(STACReader):
     Rewritten STACReader to rewrite the href to the S3 URL.
     """
 
-    def _get_asset_info(self, asset: str):
-        info = super()._get_asset_info(asset)
-        url = info["url"]
-        resolved_path, _ = rewrite_https_to_s3_if_needed(url)
-        info["url"] = resolved_path
-        logging.info(f"XXX===> info: {info}")
-        return info
+    # def _get_asset_info(self, asset: str):
+    #     info = super()._get_asset_info(asset)
+    #     url = info["url"]
+    #     resolved_path, _ = rewrite_https_to_s3_if_needed(url)
+    #     info["url"] = resolved_path
+    #     logging.info(f"XXX===> info: {info}")
+    #     return info
+
+    def __post_init__(self):
+        """
+        Rewrite all asset HREFs to S3 URIs.
+        """
+        super().__post_init__()
+        # item is a pystac.Item object
+        for asset_key in self.item.assets:
+            href = self.item.assets[asset_key].href
+            # Only rewrite if it's an HTTP/S link
+            if href.startswith("http"):
+                resolved_path, _ = rewrite_https_to_s3_if_needed(href)
+                self.item.assets[asset_key].href = resolved_path
 
 
 def configure_reader(
