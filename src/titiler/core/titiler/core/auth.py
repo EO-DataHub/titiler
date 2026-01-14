@@ -199,6 +199,11 @@ def resolve_src_path_and_credentials(
         boto_session = assume_aws_role_with_token(token)
         aws_session = AWSSession(boto_session, requester_pays=False)
         updated_env["session"] = aws_session
+        updated_env["aws_access_key_id"] = aws_session.credentials["aws_access_key_id"]
+        updated_env["aws_secret_access_key"] = aws_session.credentials[
+            "aws_secret_access_key"
+        ]
+        updated_env["aws_session_token"] = aws_session.credentials["aws_session_token"]
 
     # 2) Whitelisted, in public workspace segment and no auth headers supplied (use service account credentials)
     elif is_file_in_public_workspace(src_path) and not auth_token_in_request_header(
