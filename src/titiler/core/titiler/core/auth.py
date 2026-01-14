@@ -113,6 +113,10 @@ def assume_aws_role_with_token(token: str) -> boto3.Session:
     Uses a web identity token to assume the AWS private role,
     returning a boto3 Session configured with temporary credentials.
     """
+
+    logging.info("XXX===> before assume_role_with_web_identity")
+    logging.info(f"XXX===> AWS_PRIVATE_ROLE_ARN: {AWS_PRIVATE_ROLE_ARN}")
+
     sts = boto3.client("sts")
     response = sts.assume_role_with_web_identity(
         RoleArn=AWS_PRIVATE_ROLE_ARN,
@@ -125,9 +129,6 @@ def assume_aws_role_with_token(token: str) -> boto3.Session:
 
     logging.info(f"XXX===> AssumedRoleArn: {assumed_role['Arn']}")
     logging.info(f"XXX===> AssumedRoleId: {assumed_role['AssumedRoleId']}")
-    logging.info(f"XXX===> export AWS_ACCESS_KEY_ID={creds['AccessKeyId']}")
-    logging.info(f"XXX===> export AWS_SECRET_ACCESS_KEY={creds['SecretAccessKey']}")
-    logging.info(f"XXX===> export AWS_SESSION_TOKEN={creds['SessionToken']}")
 
     return boto3.Session(
         aws_access_key_id=creds["AccessKeyId"],
@@ -228,10 +229,6 @@ def resolve_src_path_and_credentials(
                 detail="Unauthorized access to workspace",
             )
         resolved_path = os.path.normpath(f"/mnt/efs/{workspace}/{path}")
-
-    logging.info(f"XXX===> updated_env['session']: {vars(updated_env['session'])}")
-    logging.info(f"XXX===> resolved_path: {resolved_path}")
-
     return resolved_path, updated_env
 
 

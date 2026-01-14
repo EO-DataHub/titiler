@@ -1,6 +1,7 @@
 """TiTiler Router factories."""
 
 import abc
+import logging
 import os
 from typing import (
     Any,
@@ -950,6 +951,18 @@ class TilerFactory(BaseFactory):
             extra_kwargs, reader_cls = configure_reader(
                 self.reader, request, {"tms": tms}
             )
+
+            creds = updated_env["session"].credentials
+            logging.info(
+                f"XXX===> export AWS_ACCESS_KEY_ID={creds['aws_access_key_id']}"
+            )
+            logging.info(
+                f"XXX===> export AWS_SECRET_ACCESS_KEY={creds['aws_secret_access_key']}"
+            )
+            logging.info(
+                f"XXX===> export AWS_SESSION_TOKEN={creds['aws_session_token']}"
+            )
+            logging.info(f"XXX===> resolved_path: {resolved_path}")
 
             with rasterio.Env(**updated_env):
                 with reader_cls(
