@@ -988,7 +988,27 @@ class TilerFactory(BaseFactory):
             for key, value in updated_env.items():
                 logging.info(f"XXX===> updated_env['{key}']: {value}")
 
+            ###
+            import boto3
+
+            ###
+
             with rasterio.Env(**updated_env):
+                ############################################################
+                session1 = boto3.Session()
+                credentials = session1.get_credentials()
+                if credentials:
+                    sts = session1.client("sts")
+                    identity = sts.get_caller_identity()
+                    logging.info(
+                        f"XXX===> rasterio: AWS Account: {identity['Account']}"
+                    )
+                    logging.info(f"XXX===> rasterio: AWS UserId: {identity['UserId']}")
+                    logging.info(f"XXX===> rasterio: AWS Arn: {identity['Arn']}")
+                else:
+                    logging.info("XXX===> rasterio: No boto credentials found")
+                ############################################################
+
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
@@ -1003,34 +1023,26 @@ class TilerFactory(BaseFactory):
                     )
                     dst_colormap = getattr(src_dst, "colormap", None)
 
-                    ####
-                    import boto3
-
-                    session = boto3.Session()
-                    credentials = session.get_credentials()
+                    ############################################################
+                    session2 = boto3.Session()
+                    credentials = session2.get_credentials()
                     if credentials:
-                        logging.info(
-                            f"XXX===> rasterio: export AWS_ACCESS_KEY_ID={credentials.access_key}"
-                        )
-                        logging.info(
-                            f"XXX===> rasterio: export AWS_SECRET_ACCESS_KEY={credentials.secret_key}"
-                        )
-                        logging.info(
-                            f"XXX===> rasterio: export AWS_SESSION_TOKEN={credentials.token}"
-                        )
-                        # Log caller identity (like `aws sts get-caller-identity`)
-                        sts = session.client("sts")
+                        sts = session2.client("sts")
                         identity = sts.get_caller_identity()
                         logging.info(
-                            f"XXX===> rasterio: AWS Account: {identity['Account']}"
+                            f"XXX===> rasterio:reader_cls: AWS Account: {identity['Account']}"
                         )
                         logging.info(
-                            f"XXX===> rasterio: AWS UserId: {identity['UserId']}"
+                            f"XXX===> rasterio:reader_cls: AWS UserId: {identity['UserId']}"
                         )
-                        logging.info(f"XXX===> rasterio: AWS Arn: {identity['Arn']}")
+                        logging.info(
+                            f"XXX===> rasterio:reader_cls: AWS Arn: {identity['Arn']}"
+                        )
                     else:
-                        logging.info("XXX===> rasterio: No boto credentials found")
-                    ####
+                        logging.info(
+                            "XXX===> rasterio:reader_cls: No boto credentials found"
+                        )
+                    ############################################################
 
             if post_process:
                 image = post_process(image)
