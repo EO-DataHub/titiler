@@ -1,9 +1,6 @@
 """TiTiler Router factories."""
 
 import abc
-
-# xxx
-import logging
 import os
 from typing import (
     Any,
@@ -99,8 +96,6 @@ from titiler.core.routing import EndpointScope
 from titiler.core.utils import bounds_to_geometry, render_image
 from titiler.xarray.io import Reader as XarrayReader
 
-# xxx
-
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])
 )
@@ -117,14 +112,6 @@ class RewriteSTACReader(STACReader):
         url = info["url"]
         resolved_path, _ = rewrite_https_to_s3_if_needed(url)
         info["url"] = resolved_path
-
-        # xxx
-
-        logging.info(f"XXX===> Resolved path: {resolved_path}")
-        logging.info(f"XXX===> Info: {info}")
-
-        # xxx
-
         return info
 
 
