@@ -113,6 +113,7 @@ class RewriteSTACReader(STACReader):
         url = info["url"]
         resolved_path, _ = rewrite_https_to_s3_if_needed(url)
         info["url"] = resolved_path
+        logging.info(f"XXX===> info: {info}")
         return info
 
 
