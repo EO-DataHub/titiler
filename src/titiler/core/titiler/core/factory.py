@@ -125,15 +125,15 @@ class RewriteSTACReader(STACReader):
         super().__attrs_post_init__()
         # item is a pystac.Item object
         for asset_key in self.assets:
-            href = self.assets[asset_key].href
+            href = self.item.assets[asset_key].href
             # Only rewrite if it's an HTTP/S link
             logging.info(f"XXX===> asset href: {href}")
 
             if href.startswith("http"):
                 resolved_path, _ = rewrite_https_to_s3_if_needed(href)
-                self.assets[asset_key].href = resolved_path
+                self.item.assets[asset_key].href = resolved_path
                 logging.info(
-                    f"XXX===> asset href rewritten: {self.assets[asset_key].href}"
+                    f"XXX===> asset href rewritten: {self.item.assets[asset_key].href}"
                 )
 
 
