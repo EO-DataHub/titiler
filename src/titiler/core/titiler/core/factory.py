@@ -965,6 +965,9 @@ class TilerFactory(BaseFactory):
             )
             logging.info(f"XXX===> resolved_path: {resolved_path}")
 
+            for key, value in updated_env.items():
+                logging.info(f"XXX===> updated_env['{key}']: {value}")
+
             with rasterio.Env(**updated_env):
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
