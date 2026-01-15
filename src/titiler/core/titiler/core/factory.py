@@ -988,10 +988,24 @@ class TilerFactory(BaseFactory):
             for key, value in updated_env.items():
                 logging.info(f"XXX===> updated_env['{key}']: {value}")
 
-            ###
+            ############################################################
             import boto3
 
-            ###
+            session1 = boto3.Session()
+            credentials = session1.get_credentials()
+            if credentials:
+                sts = session1.client("sts")
+                identity = sts.get_caller_identity()
+                logging.info(
+                    f"XXX===> before_rasterio: AWS Account: {identity['Account']}"
+                )
+                logging.info(
+                    f"XXX===> before_rasterio: AWS UserId: {identity['UserId']}"
+                )
+                logging.info(f"XXX===> before_rasterio: AWS Arn: {identity['Arn']}")
+            else:
+                logging.info("XXX===> before_rasterio: No boto credentials found")
+            ############################################################
 
             with rasterio.Env(**updated_env):
                 ############################################################
