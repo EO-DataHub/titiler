@@ -12,6 +12,8 @@ import jwt
 from fastapi import HTTPException, Request
 from rasterio.session import AWSSession
 
+logger = logging.getLogger(__name__)
+
 CREDENTIALS_ENDPOINT = os.getenv("CREDENTIALS_ENDPOINT", "")
 AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
@@ -100,7 +102,8 @@ def assume_aws_role_with_token(token: str) -> boto3.Session:
     returning a boto3 Session configured with temporary credentials.
     """
 
-    logging.debug(f"XXX==-> token: {token}")
+    logger.debug(f"XXX==-> token: {token}")
+
     sts = boto3.client("sts")
     creds = sts.assume_role_with_web_identity(
         RoleArn=AWS_PRIVATE_ROLE_ARN,
