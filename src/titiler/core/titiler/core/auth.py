@@ -150,9 +150,10 @@ def resolve_src_path_and_credentials(
     Resolves the given source path and determines the correct AWS credentials (if any).
     This covers four scenarios:
       1) A whitelisted S3/HTTPS URL (requires an AWS role assumption if not public).
-      2) A public workspace URL (uses service account credentials).
-      3) A non-DataHub URL (passed through as-is).
-      4) A local EFS path (checks workspace authorisation via JWT claims).
+      2) An EODH STAC item URL (requires an AWS role assumption if not public).
+      3) A public workspace URL (uses service account credentials).
+      4) A non-DataHub URL (passed through as-is).
+      5) A local EFS path (checks workspace authorisation via JWT claims).
 
     Returns:
         A tuple of (resolved_path, updated_gdal_environment).
@@ -177,6 +178,7 @@ def resolve_src_path_and_credentials(
         aws_session = AWSSession(boto_session, requester_pays=False)
         updated_env["session"] = aws_session
 
+    # 2) EODH STAC item URL (requires an AWS role assumption if not public)
     elif is_stac_item_url(src_path) and auth_token_in_request_header(request.headers):
         resolved_path = src_path
         auth_header = request.headers.get("Authorization", "")
@@ -191,7 +193,7 @@ def resolve_src_path_and_credentials(
         aws_session = AWSSession(session=boto_session, requester_pays=False)
         updated_env["session"] = aws_session
 
-    # 2) Whitelisted, in public workspace segment and no auth headers supplied (use service account credentials)
+    # 3) Whitelisted, in public workspace segment and no auth headers supplied (use service account credentials)
     elif is_file_in_public_workspace(src_path) and not auth_token_in_request_header(
         request.headers
     ):
@@ -208,11 +210,11 @@ def resolve_src_path_and_credentials(
         aws_session = AWSSession(boto_session, requester_pays=False)
         updated_env["session"] = aws_session
 
-    # 3) Non-DataHub URL (S3/HTTPS/etc.)
+    # 4) Non-DataHub URL (S3/HTTPS/etc.)
     elif parsed.scheme and parsed.netloc:
         resolved_path = src_path
 
-    # 4) Local EFS path (check JWT and normalise path)
+    # 5) Local EFS path (check JWT and normalise path)
     else:
         workspace, path = parse_efs_path(src_path)
         claims = decode_jwt_token(request.headers.get("Authorization", ""))
