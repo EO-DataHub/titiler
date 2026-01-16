@@ -145,6 +145,8 @@ def resolve_src_path_and_credentials(
     updated_env = dict(gdal_env)
     parsed = urlparse(src_path)
 
+    logging.info(f"XXX===> request.headers: {request.headers.get('Authorization', '')}")
+
     # 1) Whitelisted and auth header present (use AWS role assumption)
     if is_whitelisted_url(src_path) and auth_token_in_request_header(request.headers):
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
