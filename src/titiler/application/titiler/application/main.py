@@ -47,7 +47,7 @@ from titiler.xarray.factory import TilerFactory as XarrayTilerFactory
 logging.getLogger("botocore.credentials").disabled = True
 logging.getLogger("botocore.utils").disabled = True
 logging.getLogger("rio-tiler").setLevel(logging.ERROR)
-logging.getLogger().setLevel(logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])

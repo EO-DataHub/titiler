@@ -100,7 +100,7 @@ def assume_aws_role_with_token(token: str) -> boto3.Session:
     returning a boto3 Session configured with temporary credentials.
     """
 
-    logging.info(f"XXX==-> token: {token}")
+    logging.debug(f"XXX==-> token: {token}")
     sts = boto3.client("sts")
     creds = sts.assume_role_with_web_identity(
         RoleArn=AWS_PRIVATE_ROLE_ARN,
