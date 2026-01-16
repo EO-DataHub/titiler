@@ -99,9 +99,8 @@ def assume_aws_role_with_token(token: str) -> boto3.Session:
     Uses a web identity token to assume the AWS private role,
     returning a boto3 Session configured with temporary credentials.
     """
-    import logging
 
-    logging.info(f"XXX===> token: {token}")
+    logging.info(f"XXX==-> token: {token}")
     sts = boto3.client("sts")
     creds = sts.assume_role_with_web_identity(
         RoleArn=AWS_PRIVATE_ROLE_ARN,
