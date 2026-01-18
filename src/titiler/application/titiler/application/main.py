@@ -44,15 +44,9 @@ from titiler.mosaic.factory import MosaicTilerFactory
 from titiler.xarray.extensions import VariablesExtension
 from titiler.xarray.factory import TilerFactory as XarrayTilerFactory
 
-# logging.getLogger("botocore.credentials").disabled = True
-# logging.getLogger("botocore.utils").disabled = True
-# logging.getLogger("rio-tiler").setLevel(logging.ERROR)
-# Set all loggers to DEBUG
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logging.getLogger().setLevel(logging.INFO)
-
+logging.getLogger("botocore.credentials").disabled = True
+logging.getLogger("botocore.utils").disabled = True
+logging.getLogger("rio-tiler").setLevel(logging.ERROR)
 
 jinja2_env = jinja2.Environment(
     loader=jinja2.ChoiceLoader([jinja2.PackageLoader(__package__, "templates")])

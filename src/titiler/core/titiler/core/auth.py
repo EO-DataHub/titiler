@@ -115,8 +115,6 @@ def assume_aws_role_with_token(token: str, role_arn: str) -> boto3.Session:
     returning a boto3 Session configured with temporary credentials.
     """
 
-    logging.info(f"XXX===> token: {token}")
-
     sts = boto3.client("sts")
     creds = sts.assume_role_with_web_identity(
         RoleArn=role_arn,
@@ -160,8 +158,6 @@ def resolve_src_path_and_credentials(
     """
     updated_env = dict(gdal_env)
     parsed = urlparse(src_path)
-
-    logging.info(f"XXX===> request.headers: {request.headers.get('Authorization', '')}")
 
     # 1) Whitelisted and auth header present (use AWS role assumption)
     if is_whitelisted_url(src_path) and auth_token_in_request_header(request.headers):
