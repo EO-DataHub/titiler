@@ -13,7 +13,8 @@ from fastapi import HTTPException, Request
 from rasterio.session import AWSSession
 
 CREDENTIALS_ENDPOINT = os.getenv("CREDENTIALS_ENDPOINT", "")
-AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN")
+AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN", "")
+AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN", "")
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 
 EODH_WORKSPACE_URL_PATTERN = re.compile(
@@ -32,6 +33,13 @@ EODH_S3_BUCKET_PATTERN = re.compile(
     os.getenv("EODH_S3_BUCKET_PATTERN", r"^s3://workspaces-eodhp-[\w-]+/")
 )
 
+EODH_STAC_ITEM_URL_PATTERN = re.compile(
+    os.getenv(
+        "EODH_STAC_ITEM_URL_PATTERN",
+        r"^https?://(?:[a-z0-9-]+\.)?eodatahub\.org\.uk/api/catalogue/stac/(?:catalogs/[^/]+/)+collections/[^/]+/items/[^/]+$",
+    )
+)
+
 WHITELIST_PATTERNS = [
     EODH_WORKSPACE_URL_PATTERN,
     EODH_S3_HTTPS_PATTERN,
@@ -44,6 +52,13 @@ EFS_PATH_PATTERN = re.compile(r"^/mnt/efs/(?P<workspace>[^/]+)/(?P<path>.+)$")
 GENERAL_HTTPS_PATTERN = re.compile(
     r"^https://(?P<bucket>[\w-]+)\.s3\.[\w-]+\.amazonaws\.com/(?P<key>.+)$"
 )
+
+
+def is_stac_item_url(url: str) -> bool:
+    """
+    Checks if the given URL matches the EODH STAC item URL pattern.
+    """
+    return bool(EODH_STAC_ITEM_URL_PATTERN.match(url))
 
 
 def is_whitelisted_url(url: str) -> bool:
@@ -94,14 +109,15 @@ def rewrite_https_to_s3_force(url: str) -> str:
     return url
 
 
-def assume_aws_role_with_token(token: str) -> boto3.Session:
+def assume_aws_role_with_token(token: str, role_arn: str) -> boto3.Session:
     """
     Uses a web identity token to assume the AWS private role,
     returning a boto3 Session configured with temporary credentials.
     """
+
     sts = boto3.client("sts")
     creds = sts.assume_role_with_web_identity(
-        RoleArn=AWS_PRIVATE_ROLE_ARN,
+        RoleArn=role_arn,
         RoleSessionName="titiler-core",
         DurationSeconds=900,
         WebIdentityToken=token,
@@ -132,9 +148,10 @@ def resolve_src_path_and_credentials(
     Resolves the given source path and determines the correct AWS credentials (if any).
     This covers four scenarios:
       1) A whitelisted S3/HTTPS URL (requires an AWS role assumption if not public).
-      2) A public workspace URL (uses service account credentials).
-      3) A non-DataHub URL (passed through as-is).
-      4) A local EFS path (checks workspace authorisation via JWT claims).
+      2) An EODH STAC item URL (requires an AWS role assumption if not public).
+      3) A public workspace URL (uses service account credentials).
+      4) A non-DataHub URL (passed through as-is).
+      5) A local EFS path (checks workspace authorisation via JWT claims).
 
     Returns:
         A tuple of (resolved_path, updated_gdal_environment).
@@ -153,24 +170,47 @@ def resolve_src_path_and_credentials(
             )
 
         token = auth_header.removeprefix("Bearer ")
-        boto_session = assume_aws_role_with_token(token)
+        boto_session = assume_aws_role_with_token(token, AWS_PRIVATE_ROLE_ARN)
         aws_session = AWSSession(boto_session, requester_pays=False)
         updated_env["session"] = aws_session
 
-    # 2) Whitelisted, in public workspace segment and no auth headers supplied (use service account credentials)
+    # 2) EODH STAC item URL (requires an AWS role assumption if not public)
+    elif is_stac_item_url(src_path) and auth_token_in_request_header(request.headers):
+        resolved_path = src_path
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(
+                status_code=403,
+                detail="Missing authorization token",
+            )
+
+        token = auth_header.removeprefix("Bearer ")
+        boto_session = assume_aws_role_with_token(token, AWS_PRIVATE_ROLE_ARN)
+        aws_session = AWSSession(session=boto_session, requester_pays=False)
+        updated_env["session"] = aws_session
+
+    # 3) Whitelisted, in public workspace segment and no auth headers supplied (use service account credentials)
     elif is_file_in_public_workspace(src_path) and not auth_token_in_request_header(
         request.headers
     ):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            raise HTTPException(
+                status_code=403,
+                detail="Missing authorization token",
+            )
+
+        token = auth_header.removeprefix("Bearer ")
         resolved_path, _ = rewrite_https_to_s3_if_needed(src_path)
-        boto_session = boto3.Session()
+        boto_session = assume_aws_role_with_token(token, AWS_PUBLIC_ROLE_ARN)
         aws_session = AWSSession(boto_session, requester_pays=False)
         updated_env["session"] = aws_session
 
-    # 3) Non-DataHub URL (S3/HTTPS/etc.)
+    # 4) Non-DataHub URL (S3/HTTPS/etc.)
     elif parsed.scheme and parsed.netloc:
         resolved_path = src_path
 
-    # 4) Local EFS path (check JWT and normalise path)
+    # 5) Local EFS path (check JWT and normalise path)
     else:
         workspace, path = parse_efs_path(src_path)
         claims = decode_jwt_token(request.headers.get("Authorization", ""))

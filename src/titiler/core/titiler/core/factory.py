@@ -951,7 +951,10 @@ class TilerFactory(BaseFactory):
                 self.reader, request, {"tms": tms}
             )
 
-            with rasterio.Env(**updated_env):
+            with rasterio.Env(**updated_env) as rasterio_env:
+                if reader_cls == RewriteSTACReader:
+                    extra_kwargs["ctx"] = lambda: rasterio_env
+
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
@@ -1710,7 +1713,10 @@ class MultiBaseTilerFactory(TilerFactory):
             )
             extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
-            with rasterio.Env(**updated_env):
+            with rasterio.Env(**updated_env) as rasterio_env:
+                if reader_cls == RewriteSTACReader:
+                    extra_kwargs["ctx"] = lambda: rasterio_env
+
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
@@ -1742,7 +1748,10 @@ class MultiBaseTilerFactory(TilerFactory):
             )
             extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
-            with rasterio.Env(**updated_env):
+            with rasterio.Env(**updated_env) as rasterio_env:
+                if reader_cls == RewriteSTACReader:
+                    extra_kwargs["ctx"] = lambda: rasterio_env
+
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
@@ -1773,7 +1782,10 @@ class MultiBaseTilerFactory(TilerFactory):
             )
             extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
-            with rasterio.Env(**updated_env):
+            with rasterio.Env(**updated_env) as rasterio_env:
+                if reader_cls == RewriteSTACReader:
+                    extra_kwargs["ctx"] = lambda: rasterio_env
+
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
@@ -1813,7 +1825,10 @@ class MultiBaseTilerFactory(TilerFactory):
             )
             extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
-            with rasterio.Env(**updated_env):
+            with rasterio.Env(**updated_env) as rasterio_env:
+                if reader_cls == RewriteSTACReader:
+                    extra_kwargs["ctx"] = lambda: rasterio_env
+
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
@@ -1857,7 +1872,10 @@ class MultiBaseTilerFactory(TilerFactory):
             )
             extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
-            with rasterio.Env(**updated_env):
+            with rasterio.Env(**updated_env) as rasterio_env:
+                if reader_cls == RewriteSTACReader:
+                    extra_kwargs["ctx"] = lambda: rasterio_env
+
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
@@ -1920,7 +1938,10 @@ class MultiBaseTilerFactory(TilerFactory):
             )
             extra_kwargs, reader_cls = configure_reader(self.reader, request)
 
-            with rasterio.Env(**updated_env):
+            with rasterio.Env(**updated_env) as rasterio_env:
+                if reader_cls == RewriteSTACReader:
+                    extra_kwargs["ctx"] = lambda: rasterio_env
+
                 with reader_cls(
                     resolved_path, **extra_kwargs, **reader_params.as_dict()
                 ) as src_dst:
