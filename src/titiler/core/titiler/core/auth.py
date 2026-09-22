@@ -4,18 +4,41 @@ import logging
 import os
 import re
 import urllib.parse
+from functools import lru_cache
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
 import boto3
 import jwt
 from fastapi import HTTPException, Request
+from jwt import PyJWKClient
 from rasterio.session import AWSSession
 
 CREDENTIALS_ENDPOINT = os.getenv("CREDENTIALS_ENDPOINT", "")
 AWS_PRIVATE_ROLE_ARN = os.getenv("AWS_PRIVATE_ROLE_ARN", "")
 AWS_PUBLIC_ROLE_ARN = os.getenv("AWS_PUBLIC_ROLE_ARN", "")
 DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
+
+KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL", "example/keycloak/realms/test")
+KEYCLOAK_CERTS_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/certs"
+
+# Matches the client IDs tokens for this platform are actually issued under, per the
+# reference implementation in eodh-ac-api/wf-catalogue-service. Overridable per deployment
+# since the Keycloak client/audience isn't guaranteed to be the same everywhere.
+JWT_AUDIENCE_RAW = os.getenv(
+    "JWT_AUDIENCE", "oauth2-proxy-workspaces,oauth2-proxy,account"
+)
+JWT_AUDIENCE = [aud.strip() for aud in JWT_AUDIENCE_RAW.split(",") if aud.strip()]
+
+
+@lru_cache
+def _jwks_client() -> PyJWKClient:
+    """One client per process, so the JWKS document is cached rather than re-fetched from
+    Keycloak on every request. PyJWKClient does this caching internally, but only across
+    calls on the same instance.
+    """
+    return PyJWKClient(KEYCLOAK_CERTS_URL)
+
 
 EODH_WORKSPACE_URL_PATTERN = re.compile(
     os.getenv(
@@ -251,7 +274,11 @@ def is_workspace_authorized(workspace: str, claims: dict) -> bool:
 
 def decode_jwt_token(auth_header: str) -> dict:
     """
-    Decodes a JWT token from the 'Authorization' header without verifying the signature.
+    Decodes a JWT token from the 'Authorization' header, verifying its signature against
+    Keycloak's own published key (fetched from KEYCLOAK_CERTS_URL) rather than trusting an
+    upstream gateway to have checked it: a gateway sitting in front of the public path does
+    not cover traffic that reaches this service directly from elsewhere on the cluster
+    network.
     Raises an HTTPException if the token is missing or invalid.
     """
     if not auth_header.startswith("Bearer "):
@@ -262,8 +289,14 @@ def decode_jwt_token(auth_header: str) -> dict:
 
     token_str = auth_header.removeprefix("Bearer ")
     try:
-        return jwt.decode(token_str, options={"verify_signature": False})
-    except jwt.DecodeError as e:
+        signing_key = _jwks_client().get_signing_key_from_jwt(token_str)
+        return jwt.decode(
+            token_str,
+            signing_key.key,
+            audience=JWT_AUDIENCE,
+            algorithms=["RS256"],
+        )
+    except jwt.exceptions.PyJWTError as e:
         logging.exception("Failed to decode JWT token")
         raise HTTPException(
             status_code=403,
