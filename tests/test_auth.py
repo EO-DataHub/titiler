@@ -1,9 +1,31 @@
 """Basic auth string formatting checks"""
 
+import types
+from unittest import mock
+
 import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from titiler.core import auth
+
+PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def _token(key: rsa.RSAPrivateKey, aud: str = "eodh", **claims: object) -> str:
+    return jwt.encode(
+        {"sub": "test-user", "aud": aud, **claims}, key, algorithm="RS256"
+    )
+
+
+@pytest.fixture(autouse=True)
+def mock_jwks():
+    """Stand in for a call out to Keycloak's JWKS endpoint."""
+    with mock.patch.object(auth, "_jwks_client") as mock_client:
+        mock_client.return_value.get_signing_key_from_jwt.return_value = (
+            types.SimpleNamespace(key=PRIVATE_KEY.public_key())
+        )
+        yield mock_client
 
 
 def test_is_whitelisted_url():
@@ -73,7 +95,7 @@ def test_is_workspace_authorized():
 
 def test_decode_jwt_token():
     """Make sure our JWT token decoding works and throws errors when it should."""
-    token = jwt.encode({"workspaces": ["test"]}, "secret", algorithm="HS256")
+    token = _token(PRIVATE_KEY, workspaces=["test"])
     decoded = auth.decode_jwt_token(f"Bearer {token}")
     assert decoded["workspaces"] == ["test"]
 
@@ -81,3 +103,38 @@ def test_decode_jwt_token():
         auth.decode_jwt_token("wrongformat")
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Missing authorization token"
+
+
+def test_decode_jwt_token_forged_signature_is_rejected():
+    """This is the exact bug that shipped: verify_signature was False, so any signature -
+    including one that is not cryptographically valid at all - was accepted.
+    """
+    header = jwt.utils.base64url_encode(b'{"alg":"RS256","typ":"JWT"}').decode()
+    payload = jwt.utils.base64url_encode(
+        b'{"sub":"attacker","workspaces":["someone-elses-workspace"],"aud":"eodh"}'
+    ).decode()
+    forged_signature = jwt.utils.base64url_encode(b"not-a-real-signature").decode()
+    forged_token = f"{header}.{payload}.{forged_signature}"
+
+    with pytest.raises(auth.HTTPException) as excinfo:
+        auth.decode_jwt_token(f"Bearer {forged_token}")
+    assert excinfo.value.status_code == 403
+
+
+def test_decode_jwt_token_signed_by_a_different_key_is_rejected():
+    """A token signed by any key other than Keycloak's should be rejected."""
+    other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = _token(other_key)
+
+    with pytest.raises(auth.HTTPException) as excinfo:
+        auth.decode_jwt_token(f"Bearer {token}")
+    assert excinfo.value.status_code == 403
+
+
+def test_decode_jwt_token_wrong_audience_is_rejected():
+    """A validly signed token issued for a different client should be rejected."""
+    token = _token(PRIVATE_KEY, aud="some-other-client")
+
+    with pytest.raises(auth.HTTPException) as excinfo:
+        auth.decode_jwt_token(f"Bearer {token}")
+    assert excinfo.value.status_code == 403

@@ -42,6 +42,7 @@ from rio_tiler.io import (
 from rio_tiler.models import Bounds, ImageData, Info
 from rio_tiler.types import ColorMapType
 from rio_tiler.utils import CRS_to_uri, CRS_to_urn
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, Response
 from starlette.routing import Match, NoMatchFound, compile_path, replace_params
@@ -661,8 +662,10 @@ class TilerFactory(BaseFactory):
             env=Depends(self.environment_dependency),
         ):
             """Retrieve a list of available raster tilesets for the specified dataset."""
-            resolved_path, updated_env = resolve_src_path_and_credentials(
-                src_path, request, env
+            # Run off the event loop: this can make a blocking HTTP call (JWKS fetch, STS
+            # assume-role).
+            resolved_path, updated_env = await run_in_threadpool(
+                resolve_src_path_and_credentials, src_path, request, env
             )
             extra_kwargs = {}
 
@@ -762,8 +765,10 @@ class TilerFactory(BaseFactory):
         ):
             """Retrieve the raster tileset metadata for the specified dataset and tiling scheme (tile matrix set)."""
             tms = self.supported_tms.get(tileMatrixSetId)
-            resolved_path, updated_env = resolve_src_path_and_credentials(
-                src_path, request, env
+            # Run off the event loop: this can make a blocking HTTP call (JWKS fetch, STS
+            # assume-role).
+            resolved_path, updated_env = await run_in_threadpool(
+                resolve_src_path_and_credentials, src_path, request, env
             )
             extra_kwargs = {
                 "tms": tms,
