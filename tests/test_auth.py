@@ -12,7 +12,7 @@ from titiler.core import auth
 PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
 
-def _token(key: rsa.RSAPrivateKey, aud: str = "account", **claims: object) -> str:
+def _token(key: rsa.RSAPrivateKey, aud: str = "eodh", **claims: object) -> str:
     return jwt.encode(
         {"sub": "test-user", "aud": aud, **claims}, key, algorithm="RS256"
     )
@@ -111,7 +111,7 @@ def test_decode_jwt_token_forged_signature_is_rejected():
     """
     header = jwt.utils.base64url_encode(b'{"alg":"RS256","typ":"JWT"}').decode()
     payload = jwt.utils.base64url_encode(
-        b'{"sub":"attacker","workspaces":["someone-elses-workspace"],"aud":"account"}'
+        b'{"sub":"attacker","workspaces":["someone-elses-workspace"],"aud":"eodh"}'
     ).decode()
     forged_signature = jwt.utils.base64url_encode(b"not-a-real-signature").decode()
     forged_token = f"{header}.{payload}.{forged_signature}"

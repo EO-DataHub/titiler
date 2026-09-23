@@ -22,12 +22,11 @@ DEFAULT_REGION = os.getenv("AWS_REGION", "eu-west-2")
 KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL", "example/keycloak/realms/test")
 KEYCLOAK_CERTS_URL = f"https://{KEYCLOAK_BASE_URL}/protocol/openid-connect/certs"
 
-# Matches the client IDs tokens for this platform are actually issued under, per the
-# reference implementation in eodh-ac-api/wf-catalogue-service. Overridable per deployment
-# since the Keycloak client/audience isn't guaranteed to be the same everywhere.
-JWT_AUDIENCE_RAW = os.getenv(
-    "JWT_AUDIENCE", "oauth2-proxy-workspaces,oauth2-proxy,account"
-)
+# The Keycloak client IDs platform tokens are issued for (the audience mappers on the
+# eodh and eodh-workspaces clients, eodhp-argocd-deployment
+# apps/keycloak/base/realms.yaml). This list is duplicated across the platform's
+# services, so change them together. Overridable per deployment via JWT_AUDIENCE.
+JWT_AUDIENCE_RAW = os.getenv("JWT_AUDIENCE", "eodh,eodh-workspaces")
 JWT_AUDIENCE = [aud.strip() for aud in JWT_AUDIENCE_RAW.split(",") if aud.strip()]
 
 
